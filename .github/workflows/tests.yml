@@ -22,6 +22,16 @@ jobs:
           enable-cache: true
           python-version: "3.11"
 
+      - name: 🧰 Install system build deps
+        # reachy-mini → pygobject → pycairo build from source and need
+        # cairo + GObject-Introspection headers.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libcairo2-dev \
+            libgirepository-2.0-dev \
+            pkg-config
+
       - name: 📦 Sync (uses uv.lock)
         run: uv sync --frozen
 
