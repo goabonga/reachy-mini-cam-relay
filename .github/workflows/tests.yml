@@ -23,13 +23,13 @@ jobs:
           python-version: "3.11"
 
       - name: 🧰 Install system build deps
-        # reachy-mini → pygobject → pycairo build from source and need
-        # cairo + GObject-Introspection headers.
+        # reachy-mini → pygobject (3.46) → pycairo build from source and need
+        # cairo + the gobject-introspection-1.0 (legacy) pkg-config files.
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             libcairo2-dev \
-            libgirepository-2.0-dev \
+            libgirepository1.0-dev \
             pkg-config
 
       - name: 📦 Sync (uses uv.lock)
