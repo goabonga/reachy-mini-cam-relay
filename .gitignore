@@ -14,8 +14,15 @@ dist/
 # OS
 .DS_Store
 
-# Tooling
+# Tooling caches
 .claude/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
 
 # Project
 *.log

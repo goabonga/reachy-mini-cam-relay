@@ -47,8 +47,10 @@ uv sync --extra head-tracking              # add the optional MediaPipe extras (
 uv lock                                    # refresh uv.lock after editing pyproject.toml
 uv build                                   # build sdist + wheel into dist/
 uv run reachy-mini-cam-relay --help        # run the CLI from the project venv
-uv run python -m compileall -q src/        # syntax check
-uv run ruff check src/                     # lint
+uv run ruff check src/ tests/              # lint
+uv run mypy src/                           # static type check
+uv run pytest                              # unit tests + coverage gate
+uv run pytest --cov-report=html            # generate htmlcov/ for browsing
 uv run cz commit                           # interactive Conventional Commits prompt
 uv run cz bump --dry-run                   # preview the next release version
 uv run cz bump --yes --changelog           # bump version + update CHANGELOG.md (release-only)
@@ -99,14 +101,27 @@ The release pipeline (`.github/workflows/release.yml`) is gated on a commit whos
 
 ## Code Quality
 
-Before pushing, make sure your code passes:
+Before pushing, make sure your code passes the same gates the `Tests` workflow runs on every push and pull request:
 
 ```console
-uv run python -m compileall -q src/    # syntax
-uv run ruff check src/                 # lint
+uv run ruff check src/ tests/   # lint (fails the build if anything reports)
+uv run mypy src/                # static type check
+uv run pytest                   # unit tests + coverage gate
 ```
 
-The `Tests` workflow (`.github/workflows/tests.yml`) runs the same checks on every push and pull request, plus a smoke import.
+### Coverage
+
+The pytest config in `pyproject.toml` enforces a minimum coverage threshold (`--cov-fail-under=40`). The bar is intentionally set just below the current state so it acts as a regression guard rather than a hard quality target — raise it as the suite grows. The orchestrating `main()` and the head-tracking module are intentionally not unit-tested (they wire pyvirtualcam, GStreamer, signal handlers and threads together and belong in an integration test layer).
+
+`htmlcov/` is git-ignored — generate it locally with `uv run pytest --cov-report=html` and open `htmlcov/index.html` to drill into uncovered lines.
+
+### Type checking
+
+`mypy` is configured permissively in `pyproject.toml` (`ignore_missing_imports = true`, `disallow_untyped_defs = false`) so untyped third-party libraries don't drown the output, but `check_untyped_defs = true` still inspects the body of every function. Expand the strictness as the codebase matures.
+
+### Adding tests
+
+Unit tests live in `tests/` and follow standard pytest discovery. Use `monkeypatch` for boundary mocks (subprocess, third-party SDK calls) and prefer testing pure logic (the `Session` class, parsing helpers, the backoff sequence) over orchestration. Keep tests fast — no real network or hardware access.
 
 ## Pull Request
 
