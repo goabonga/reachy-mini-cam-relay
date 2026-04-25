@@ -63,28 +63,29 @@ def test_retries_until_success(monkeypatch: pytest.MonkeyPatch) -> None:
     """Exercise the post-failure increment + retry path."""
     attempts = {"n": 0}
 
-    def flaky(_host: str) -> object:
+    def flaky(_host: str, _head_track: bool) -> object:
         attempts["n"] += 1
         if attempts["n"] < 3:
             raise RuntimeError("transient network glitch")
-        return f"connected-after-{attempts['n']}"
+        return (f"media-{attempts['n']}", "reachy")
 
     monkeypatch.setattr(cli, "_connect", flaky)
 
     stop = threading.Event()
-    # Don't actually wait between attempts.
     monkeypatch.setattr(stop, "wait", lambda _delay: False)
 
-    media = cli._connect_with_backoff("h", stop)
+    media, reachy = cli._connect_with_backoff("h", False, stop)
 
-    assert media == "connected-after-3"
+    assert media == "media-3"
+    assert reachy == "reachy"
     assert attempts["n"] == 3
 
 
-def test_connect_calls_media_manager(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Cover the body of ``_connect`` — that it actually constructs a
-    ``MediaManager`` with the right arguments."""
-    captured = {}
+def test_connect_without_head_track_calls_media_manager(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Cover the standalone-MediaManager branch of ``_connect``."""
+    captured: dict[str, object] = {}
 
     class FakeMediaManager:
         def __init__(self, *, backend: object, signalling_host: str) -> None:
@@ -93,8 +94,40 @@ def test_connect_calls_media_manager(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(cli, "MediaManager", FakeMediaManager)
 
-    result = cli._connect("the-reachy")
+    media, reachy = cli._connect("the-reachy", False)
 
-    assert isinstance(result, FakeMediaManager)
+    assert isinstance(media, FakeMediaManager)
+    assert reachy is None
     assert captured["signalling_host"] == "the-reachy"
     assert captured["backend"] is cli.MediaBackend.WEBRTC
+
+
+def test_connect_with_head_track_constructs_reachy_mini(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Cover the ``head_track=True`` branch — must build a ReachyMini and
+    return its media_manager paired with the instance."""
+    captured: dict[str, object] = {}
+
+    class FakeReachyMini:
+        def __init__(self, *, host: str, connection_mode: str, media_backend: str) -> None:
+            captured["host"] = host
+            captured["connection_mode"] = connection_mode
+            captured["media_backend"] = media_backend
+            self.media_manager = "media-from-reachy"
+
+    # ``cli._connect`` does ``from reachy_mini import ReachyMini`` lazily, so
+    # we patch the actual module attribute that the import resolves to.
+    import reachy_mini
+
+    monkeypatch.setattr(reachy_mini, "ReachyMini", FakeReachyMini)
+
+    media, reachy = cli._connect("the-reachy", True)
+
+    assert media == "media-from-reachy"
+    assert isinstance(reachy, FakeReachyMini)
+    assert captured == {
+        "host": "the-reachy",
+        "connection_mode": "network",
+        "media_backend": "webrtc",
+    }

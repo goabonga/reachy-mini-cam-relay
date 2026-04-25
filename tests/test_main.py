@@ -36,7 +36,7 @@ def test_main_returns_0_when_initial_connect_aborts(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr("sys.argv", _argv())
-    monkeypatch.setattr(cli, "_connect_with_backoff", lambda *_args, **_kw: None)
+    monkeypatch.setattr(cli, "_connect_with_backoff", lambda *_args, **_kw: (None, None))
 
     assert cli.main() == 0
 
@@ -49,7 +49,7 @@ def test_main_returns_0_when_first_frame_never_arrives(
     media = MagicMock()
     # Simulate get_frame raising — main breaks out and returns 0.
     media.get_frame.side_effect = RuntimeError("pipeline died")
-    monkeypatch.setattr(cli, "_connect_with_backoff", lambda *_args, **_kw: media)
+    monkeypatch.setattr(cli, "_connect_with_backoff", lambda *_args, **_kw: (media, None))
 
     assert cli.main() == 0
     media.close.assert_called()  # cleanup path ran
@@ -67,7 +67,7 @@ def test_main_returns_0_when_stop_event_set_before_first_frame(
     def fake_connect(*_args, **_kw) -> MagicMock:
         media = MagicMock()
         media.get_frame.side_effect = lambda: stop_holder["evt"].set() or None
-        return media
+        return (media, None)
 
     monkeypatch.setattr(cli, "_connect_with_backoff", fake_connect)
 
@@ -92,7 +92,7 @@ def test_main_happy_path_runs_video_loop_until_stopped(
     media = MagicMock()
     media.get_frame.return_value = fake_frame
 
-    monkeypatch.setattr(cli, "_connect_with_backoff", lambda *_a, **_kw: media)
+    monkeypatch.setattr(cli, "_connect_with_backoff", lambda *_a, **_kw: (media, None))
     monkeypatch.setattr(cli, "_pactl_sinks", lambda: set())
     monkeypatch.setattr(cli.shutil, "which", lambda _name: None)
 
@@ -149,7 +149,7 @@ def test_main_spawns_and_terminates_audio_subprocesses(
 
     media = MagicMock()
     media.get_frame.return_value = fake_frame
-    monkeypatch.setattr(cli, "_connect_with_backoff", lambda *_a, **_kw: media)
+    monkeypatch.setattr(cli, "_connect_with_backoff", lambda *_a, **_kw: (media, None))
     monkeypatch.setattr(cli, "_pactl_sinks", lambda: {cli.MIC_SINK, cli.SPEAKERS_SINK})
     monkeypatch.setattr(cli.shutil, "which", lambda name: f"/usr/bin/{name}")
 
@@ -198,7 +198,7 @@ def test_main_kills_proc_when_terminate_times_out(
 
     media = MagicMock()
     media.get_frame.return_value = fake_frame
-    monkeypatch.setattr(cli, "_connect_with_backoff", lambda *_a, **_kw: media)
+    monkeypatch.setattr(cli, "_connect_with_backoff", lambda *_a, **_kw: (media, None))
     monkeypatch.setattr(cli, "_pactl_sinks", lambda: {cli.MIC_SINK, cli.SPEAKERS_SINK})
     monkeypatch.setattr(cli.shutil, "which", lambda name: f"/usr/bin/{name}")
 
@@ -243,7 +243,7 @@ def test_main_warns_and_continues_when_audio_sinks_missing(
 
     media = MagicMock()
     media.get_frame.return_value = fake_frame
-    monkeypatch.setattr(cli, "_connect_with_backoff", lambda *_a, **_kw: media)
+    monkeypatch.setattr(cli, "_connect_with_backoff", lambda *_a, **_kw: (media, None))
     monkeypatch.setattr(cli, "_pactl_sinks", lambda: set())  # no sinks
     monkeypatch.setattr(cli.shutil, "which", lambda name: f"/usr/bin/{name}")
 
@@ -298,7 +298,7 @@ def test_main_skips_frame_with_unexpected_resolution(
 
     media = MagicMock()
     media.get_frame.side_effect = lambda: next(frames_iter, None)
-    monkeypatch.setattr(cli, "_connect_with_backoff", lambda *_a, **_kw: media)
+    monkeypatch.setattr(cli, "_connect_with_backoff", lambda *_a, **_kw: (media, None))
     monkeypatch.setattr(cli, "_pactl_sinks", lambda: set())
     monkeypatch.setattr(cli.shutil, "which", lambda _name: None)
 
@@ -357,7 +357,7 @@ def test_main_reconnects_after_no_frame_timeout(
     def fake_connect(*_args: object, **_kw: object) -> MagicMock:
         next_media = media_b if connect_calls else media_a
         connect_calls.append(next_media)
-        return next_media
+        return (next_media, None)
 
     monkeypatch.setattr(cli, "_connect_with_backoff", fake_connect)
 
@@ -413,7 +413,7 @@ def test_main_treats_get_frame_exception_as_missing_frame(
     def fake_connect(*_args: object, **_kw: object) -> MagicMock:
         next_media = media_b if connect_calls else media_a
         connect_calls.append(next_media)
-        return next_media
+        return (next_media, None)
 
     monkeypatch.setattr(cli, "_connect_with_backoff", fake_connect)
 
@@ -452,7 +452,7 @@ def test_main_swallows_exception_from_proc_stdin_close(
 
     media = MagicMock()
     media.get_frame.return_value = fake_frame
-    monkeypatch.setattr(cli, "_connect_with_backoff", lambda *_a, **_kw: media)
+    monkeypatch.setattr(cli, "_connect_with_backoff", lambda *_a, **_kw: (media, None))
     monkeypatch.setattr(cli, "_pactl_sinks", lambda: {cli.MIC_SINK, cli.SPEAKERS_SINK})
     monkeypatch.setattr(cli.shutil, "which", lambda name: f"/usr/bin/{name}")
 
@@ -483,6 +483,135 @@ def test_main_swallows_exception_from_proc_stdin_close(
             cli.main()
 
 
+def test_main_with_head_track_spawns_tracking_thread(
+    monkeypatch: pytest.MonkeyPatch, fake_frame: np.ndarray
+) -> None:
+    """``--head-track`` + a non-None reachy from connect → main spawns the
+    tracking_loop thread and tags the relaying line with ``head-track``."""
+    monkeypatch.setattr(
+        "sys.argv",
+        ["reachy-mini-cam-relay", "--reachy-host", "192.0.2.1", "--head-track",
+         "--no-mic", "--no-speakers"],
+    )
+
+    media = MagicMock()
+    media.get_frame.return_value = fake_frame
+    fake_reachy = MagicMock(name="fake_reachy")
+    monkeypatch.setattr(
+        cli, "_connect_with_backoff", lambda *_a, **_kw: (media, fake_reachy)
+    )
+    monkeypatch.setattr(cli, "_pactl_sinks", lambda: set())
+    monkeypatch.setattr(cli.shutil, "which", lambda _name: None)
+
+    # Inject a fake head_track module so the lazy import resolves without
+    # pulling MediaPipe / OpenCV.
+    import sys as _sys
+    import types as _types
+
+    fake_module = _types.ModuleType("reachy_mini_cam_relay.head_track")
+    spawned: list[str] = []
+
+    class FakeFrameSlot:
+        def __init__(self) -> None:
+            self.frame: object = None
+
+        def set(self, frame: object) -> None:
+            self.frame = frame
+
+    def fake_tracking_loop(*_args: object, **_kw: object) -> None:
+        spawned.append("ran")
+
+    fake_module.FrameSlot = FakeFrameSlot  # type: ignore[attr-defined]
+    fake_module.tracking_loop = fake_tracking_loop  # type: ignore[attr-defined]
+    monkeypatch.setitem(_sys.modules, "reachy_mini_cam_relay.head_track", fake_module)
+
+    class _StopVideo(Exception):
+        pass
+
+    # Allow the first sleep (after the warm-up cam.send(first)) so the while
+    # loop body runs once and exercises ``frame_slot.set(frame)``; raise on
+    # the second to exit cleanly.
+    sleep_calls = {"n": 0}
+
+    def stop_after_one_iteration() -> None:
+        sleep_calls["n"] += 1
+        if sleep_calls["n"] >= 2:
+            raise _StopVideo()
+
+    fake_cam = MagicMock()
+    fake_cam.device = "/dev/video10"
+    fake_cam.sleep_until_next_frame.side_effect = stop_after_one_iteration
+
+    fake_camera_cm = MagicMock()
+    fake_camera_cm.__enter__.return_value = fake_cam
+    fake_camera_cm.__exit__.return_value = None
+
+    with patch.object(cli.pyvirtualcam, "Camera", return_value=fake_camera_cm):
+        with pytest.raises(_StopVideo):
+            cli.main()
+
+    import time as _time
+
+    for _ in range(20):
+        if spawned:
+            break
+        _time.sleep(0.01)
+    assert spawned == ["ran"]
+
+
+def test_main_with_head_track_falls_back_when_module_missing(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_frame: np.ndarray,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """``--head-track`` but the head_track module is unimportable: warn and
+    continue without the tracking thread."""
+    monkeypatch.setattr(
+        "sys.argv",
+        ["reachy-mini-cam-relay", "--reachy-host", "192.0.2.1", "--head-track",
+         "--no-mic", "--no-speakers"],
+    )
+
+    media = MagicMock()
+    media.get_frame.return_value = fake_frame
+    monkeypatch.setattr(
+        cli, "_connect_with_backoff", lambda *_a, **_kw: (media, MagicMock())
+    )
+    monkeypatch.setattr(cli, "_pactl_sinks", lambda: set())
+    monkeypatch.setattr(cli.shutil, "which", lambda _name: None)
+
+    import builtins
+    import sys as _sys
+
+    real_import = builtins.__import__
+
+    def fake_import(name: str, *args: object, **kwargs: object) -> object:
+        if name.endswith(".head_track") or name == "reachy_mini_cam_relay.head_track":
+            raise ImportError("simulated missing extra")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+    _sys.modules.pop("reachy_mini_cam_relay.head_track", None)
+
+    class _StopVideo(Exception):
+        pass
+
+    fake_cam = MagicMock()
+    fake_cam.device = "/dev/video10"
+    fake_cam.sleep_until_next_frame.side_effect = _StopVideo()
+
+    fake_camera_cm = MagicMock()
+    fake_camera_cm.__enter__.return_value = fake_cam
+    fake_camera_cm.__exit__.return_value = None
+
+    with patch.object(cli.pyvirtualcam, "Camera", return_value=fake_camera_cm):
+        with pytest.raises(_StopVideo):
+            cli.main()
+
+    err = capsys.readouterr().err
+    assert "head-track disabled" in err
+
+
 def test_main_signal_handler_announces_shutdown_only_once(
     monkeypatch: pytest.MonkeyPatch, fake_frame: np.ndarray
 ) -> None:
@@ -499,7 +628,7 @@ def test_main_signal_handler_announces_shutdown_only_once(
 
     media = MagicMock()
     media.get_frame.return_value = fake_frame
-    monkeypatch.setattr(cli, "_connect_with_backoff", lambda *_a, **_kw: media)
+    monkeypatch.setattr(cli, "_connect_with_backoff", lambda *_a, **_kw: (media, None))
     monkeypatch.setattr(cli, "_pactl_sinks", lambda: set())
     monkeypatch.setattr(cli.shutil, "which", lambda _name: None)
 

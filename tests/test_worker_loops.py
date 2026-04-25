@@ -156,27 +156,18 @@ def test_mic_loop_silence_then_continue_when_wait_returns_false(
 def test_mic_loop_skips_when_get_audio_sample_raises() -> None:
     session = cli.Session()
     media = MagicMock()
-    media.get_audio_sample.side_effect = [
-        RuntimeError("transient pipeline error"),
-        None,  # second call returns None so we hit the `samples is None` branch too
-    ]
-    session.set(media)
+    session.set(media, None)
 
     stop = threading.Event()
-    # Stop after a few iterations so the test terminates.
     iteration_count = {"n": 0}
 
-    def stop_after(_n: int = 3) -> None:
+    def wrapped_get_audio_sample() -> object:
         iteration_count["n"] += 1
         if iteration_count["n"] >= 3:
             stop.set()
-
-    # Wrap get_audio_sample so we can stop after N calls AND exhaust the side_effect list.
-    def wrapped_get_audio_sample() -> object:
-        stop_after()
         if iteration_count["n"] == 1:
             raise RuntimeError("transient")
-        return None
+        return None  # exercises the `samples is None: continue` branch
 
     media.get_audio_sample.side_effect = wrapped_get_audio_sample
 
@@ -193,7 +184,7 @@ def test_mic_loop_returns_on_broken_pipe_during_sample_write() -> None:
     media = MagicMock()
     samples = np.ones((cli.AUDIO_CHUNK_SAMPLES, cli.AUDIO_CHANNELS), dtype=np.float32)
     media.get_audio_sample.return_value = samples
-    session.set(media)
+    session.set(media, None)
 
     stdin = MagicMock()
     stdin.write.side_effect = BrokenPipeError()
