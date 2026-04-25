@@ -1,0 +1,35 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Chris <goabonga@pm.me>
+
+name: Tests
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  lint-and-syntax:
+    name: Lint + syntax check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 🛠️ Setup uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+          python-version: "3.11"
+
+      - name: 📦 Sync (uses uv.lock)
+        run: uv sync --frozen
+
+      - name: 🔎 Compile all Python
+        run: uv run python -m compileall -q src/
+
+      - name: 🧹 Ruff check
+        run: uv run ruff check src/ || true
+
+      - name: ✅ Import smoke test
+        run: uv run python -c "import reachy_mini_cam_relay; print(reachy_mini_cam_relay.__version__)"
