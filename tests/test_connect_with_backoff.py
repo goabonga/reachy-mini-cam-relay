@@ -56,3 +56,44 @@ def test_backoff_table_is_monotonic_and_capped() -> None:
     # The last entry caps the wait — repeated failures past the table length
     # should reuse it via the min(attempt, len-1) clamp inside the function.
     assert backoff[-1] >= 30.0
+
+
+def test_retries_until_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Exercise the post-failure increment + retry path."""
+    attempts = {"n": 0}
+
+    def flaky(_host: str) -> object:
+        attempts["n"] += 1
+        if attempts["n"] < 3:
+            raise RuntimeError("transient network glitch")
+        return f"connected-after-{attempts['n']}"
+
+    monkeypatch.setattr(cli, "_connect", flaky)
+
+    stop = threading.Event()
+    # Don't actually wait between attempts.
+    monkeypatch.setattr(stop, "wait", lambda _delay: False)
+
+    media = cli._connect_with_backoff("h", stop)
+
+    assert media == "connected-after-3"
+    assert attempts["n"] == 3
+
+
+def test_connect_calls_media_manager(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Cover the body of ``_connect`` — that it actually constructs a
+    ``MediaManager`` with the right arguments."""
+    captured = {}
+
+    class FakeMediaManager:
+        def __init__(self, *, backend: object, signalling_host: str) -> None:
+            captured["backend"] = backend
+            captured["signalling_host"] = signalling_host
+
+    monkeypatch.setattr(cli, "MediaManager", FakeMediaManager)
+
+    result = cli._connect("the-reachy")
+
+    assert isinstance(result, FakeMediaManager)
+    assert captured["signalling_host"] == "the-reachy"
+    assert captured["backend"] is cli.MediaBackend.WEBRTC
