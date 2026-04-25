@@ -34,15 +34,10 @@ packages = ["src/reachy_mini_cam_relay"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-# Coverage gate is set just below the current state so it acts as a regression
-# guard. The orchestrating `main()` is intentionally not unit-tested — it
-# wires pyvirtualcam, MediaManager, signal handlers and worker threads
-# together and belongs in an integration test layer, not here. Raise the bar
-# as that layer grows.
 addopts = [
     "--cov=reachy_mini_cam_relay",
     "--cov-report=term-missing",
-    "--cov-fail-under=40",
+    "--cov-fail-under=100",
 ]
 
 [tool.mypy]
