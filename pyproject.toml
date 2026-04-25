@@ -5,12 +5,51 @@ description = "Relay the Reachy Mini camera, microphone and speakers as Linux vi
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
-authors = [{ name = "Chris" }]
+authors = [
+    { name = "Chris", email = "goabonga@pm.me" },
+]
+keywords = [
+    "reachy",
+    "reachy-mini",
+    "robotics",
+    "telepresence",
+    "webrtc",
+    "v4l2",
+    "v4l2loopback",
+    "virtual-camera",
+    "virtual-microphone",
+    "video-conferencing",
+    "pulseaudio",
+    "pipewire",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Communications :: Conferencing",
+    "Topic :: Multimedia :: Sound/Audio",
+    "Topic :: Multimedia :: Video :: Capture",
+    "Topic :: Scientific/Engineering",
+    "Typing :: Typed",
+]
 dependencies = [
     "reachy-mini>=1.7.0",
     "pyvirtualcam>=0.11",
     "numpy",
 ]
+
+[project.urls]
+Homepage = "https://github.com/goabonga/reachy-mini-cam-relay"
+Repository = "https://github.com/goabonga/reachy-mini-cam-relay"
+Issues = "https://github.com/goabonga/reachy-mini-cam-relay/issues"
+Changelog = "https://github.com/goabonga/reachy-mini-cam-relay/blob/main/CHANGELOG.md"
 
 [dependency-groups]
 dev = [
