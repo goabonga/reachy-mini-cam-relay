@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Relay the Reachy Mini camera, microphone and speakers as Linux virtual devices for use in any browser meeting app"
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "TBD" }
+license = { text = "MIT" }
 authors = [{ name = "Chris" }]
 dependencies = [
     "reachy-mini>=1.7.0",
