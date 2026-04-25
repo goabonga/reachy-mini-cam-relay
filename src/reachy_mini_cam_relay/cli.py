@@ -5,7 +5,7 @@ import subprocess
 import sys
 import threading
 import time
-from typing import Optional
+from typing import Optional, Tuple
 
 import numpy as np
 import pyvirtualcam
@@ -34,17 +34,20 @@ class Session:
 
     def __init__(self) -> None:
         self.media: Optional[MediaManager] = None
+        self.reachy = None
         self._lock = threading.Lock()
 
-    def set(self, media: Optional[MediaManager]) -> None:
+    def set(self, media: Optional[MediaManager], reachy) -> None:
         with self._lock:
             self.media = media
+            self.reachy = reachy
 
-    def clear(self) -> Optional[MediaManager]:
+    def clear(self) -> Tuple[Optional[MediaManager], object]:
         with self._lock:
-            m = self.media
+            m, r = self.media, self.reachy
             self.media = None
-        return m
+            self.reachy = None
+        return m, r
 
 
 def _pactl_sinks() -> set[str]:
@@ -59,12 +62,26 @@ def _pactl_sinks() -> set[str]:
     return {line.split("\t")[1] for line in out.splitlines() if "\t" in line}
 
 
-def _connect(host: str) -> MediaManager:
-    return MediaManager(backend=MediaBackend.WEBRTC, signalling_host=host)
+def _connect(host: str, head_track: bool) -> Tuple[MediaManager, object]:
+    """Open a fresh daemon connection. Raises on failure."""
+    if head_track:
+        from reachy_mini import ReachyMini
+
+        reachy = ReachyMini(
+            host=host, connection_mode="network", media_backend="webrtc"
+        )
+        return reachy.media_manager, reachy
+    media = MediaManager(backend=MediaBackend.WEBRTC, signalling_host=host)
+    return media, None
 
 
-def _close(media: Optional[MediaManager]) -> None:
-    if media is not None:
+def _close(media, reachy) -> None:
+    if reachy is not None:
+        try:
+            reachy.__exit__(None, None, None)
+        except Exception:
+            pass
+    elif media is not None:
         try:
             media.close()
         except Exception:
@@ -72,14 +89,14 @@ def _close(media: Optional[MediaManager]) -> None:
 
 
 def _connect_with_backoff(
-    host: str, stop_event: threading.Event
-) -> Optional[MediaManager]:
+    host: str, head_track: bool, stop_event: threading.Event
+) -> Tuple[Optional[MediaManager], object]:
     attempt = 0
     while not stop_event.is_set():
         try:
-            media = _connect(host)
+            media, reachy = _connect(host, head_track)
             print(f"connected to {host}", file=sys.stderr)
-            return media
+            return media, reachy
         except Exception as e:
             delay = RECONNECT_BACKOFF_S[min(attempt, len(RECONNECT_BACKOFF_S) - 1)]
             print(
@@ -87,9 +104,9 @@ def _connect_with_backoff(
                 file=sys.stderr,
             )
             if stop_event.wait(delay):
-                return None
+                return None, None
             attempt += 1
-    return None
+    return None, None
 
 
 def _mic_loop(
@@ -151,6 +168,11 @@ def main() -> int:
     parser.add_argument("--fps", type=int, default=30)
     parser.add_argument("--no-mic", action="store_true", help="disable Reachy→browser audio")
     parser.add_argument("--no-speakers", action="store_true", help="disable browser→Reachy audio")
+    parser.add_argument(
+        "--head-track",
+        action="store_true",
+        help="make the Reachy head follow the detected face (requires [head-tracking] extras)",
+    )
     args = parser.parse_args()
 
     stop_event = threading.Event()
@@ -165,13 +187,15 @@ def main() -> int:
     signal.signal(signal.SIGINT, handle_signal)
     signal.signal(signal.SIGTERM, handle_signal)
 
-    media = _connect_with_backoff(args.reachy_host, stop_event)
+    # Initial connection (blocking, retries until success or stop).
+    media, reachy = _connect_with_backoff(args.reachy_host, args.head_track, stop_event)
     if media is None:
         return 0
 
     session = Session()
-    session.set(media)
+    session.set(media, reachy)
 
+    # Wait for the first frame so we know the resolution before opening /dev/videoN.
     first = None
     while first is None and not stop_event.is_set():
         try:
@@ -180,7 +204,8 @@ def main() -> int:
             first = None
             break
     if stop_event.is_set() or first is None:
-        _close(session.clear())
+        m, r = session.clear()
+        _close(m, r)
         return 0
 
     height, width = first.shape[:2]
@@ -192,6 +217,7 @@ def main() -> int:
     mic_proc: Optional[subprocess.Popen] = None
     spk_proc: Optional[subprocess.Popen] = None
     threads: list[threading.Thread] = []
+    frame_slot = None
     try:
         if not args.no_mic:
             if pacat and MIC_SINK in sinks:
@@ -244,6 +270,26 @@ def main() -> int:
                     file=sys.stderr,
                 )
 
+        if args.head_track and reachy is not None:
+            try:
+                from reachy_mini_cam_relay.head_track import FrameSlot, tracking_loop
+
+                frame_slot = FrameSlot()
+                frame_slot.set(first)
+                t = threading.Thread(
+                    target=tracking_loop,
+                    args=(session, frame_slot, stop_event),
+                    daemon=True,
+                )
+                t.start()
+                threads.append(t)
+            except ImportError:
+                print(
+                    "note: head-track disabled — install with `pip install -e '.[head-tracking]'`",
+                    file=sys.stderr,
+                )
+                frame_slot = None
+
         with pyvirtualcam.Camera(
             width=width,
             height=height,
@@ -256,6 +302,8 @@ def main() -> int:
                 tags.append("mic")
             if spk_proc is not None:
                 tags.append("speakers")
+            if frame_slot is not None:
+                tags.append("head-track")
             suffix = f" + {' + '.join(tags)}" if tags else ""
             print(
                 f"relaying {args.reachy_host} ({width}x{height}@{args.fps}fps{suffix}) -> {cam.device}",
@@ -271,11 +319,14 @@ def main() -> int:
                 current_media = session.media
 
                 if current_media is None:
+                    # Disconnected — keep the virtual device alive and retry.
                     cam.send(last_frame)
                     cam.sleep_until_next_frame()
-                    new_media = _connect_with_backoff(args.reachy_host, stop_event)
+                    new_media, new_reachy = _connect_with_backoff(
+                        args.reachy_host, args.head_track, stop_event
+                    )
                     if new_media is not None:
-                        session.set(new_media)
+                        session.set(new_media, new_reachy)
                         last_frame_time = time.monotonic()
                     continue
 
@@ -290,17 +341,22 @@ def main() -> int:
                             f"no frames for {NO_FRAME_TIMEOUT_S:.0f}s — reconnecting",
                             file=sys.stderr,
                         )
-                        _close(session.clear())
+                        old_media, old_reachy = session.clear()
+                        _close(old_media, old_reachy)
                     cam.send(last_frame)
                     cam.sleep_until_next_frame()
                     continue
 
                 if frame.shape[:2] != (height, width):
+                    # Shouldn't happen since the daemon doesn't change resolution mid-stream;
+                    # if it does we'd need to resize or recreate the v4l2 device.
                     continue
 
                 last_frame = frame
                 last_frame_time = time.monotonic()
                 cam.send(frame)
+                if frame_slot is not None:
+                    frame_slot.set(frame)
                 cam.sleep_until_next_frame()
     finally:
         stop_event.set()
@@ -319,7 +375,8 @@ def main() -> int:
                 proc.wait(timeout=2)
             except subprocess.TimeoutExpired:
                 proc.kill()
-        _close(session.clear())
+        m, r = session.clear()
+        _close(m, r)
 
     return 0
 

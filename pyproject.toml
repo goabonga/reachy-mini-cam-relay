@@ -45,6 +45,13 @@ dependencies = [
     "numpy",
 ]
 
+[project.optional-dependencies]
+head-tracking = [
+    "mediapipe>=0.10",
+    "opencv-python>=4.8",
+    "scipy>=1.10",
+]
+
 [project.urls]
 Homepage = "https://github.com/goabonga/reachy-mini-cam-relay"
 Repository = "https://github.com/goabonga/reachy-mini-cam-relay"
@@ -78,6 +85,11 @@ addopts = [
     "--cov-report=term-missing",
     "--cov-fail-under=100",
 ]
+
+[tool.coverage.run]
+# head_track.py is mostly MediaPipe/GStreamer orchestration with threads —
+# tested via integration paths, not the unit suite.
+omit = ["*/head_track.py"]
 
 [tool.mypy]
 python_version = "3.11"
