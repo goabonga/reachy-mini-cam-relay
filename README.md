@@ -74,11 +74,6 @@ Resolution is auto-detected from the incoming stream. Optional flags: `--fps 30`
 - Chrome ignores v4l2loopback devices unless the module is loaded with `exclusive_caps=1`. The setup script handles that.
 - Port 8443 must be reachable on the Reachy. Verify with `nmap -p 8443 <reachy-ip>`.
 - The Reachy daemon may hold the camera exclusively. If frames never arrive, hit `POST /api/media/acquire` on the dashboard (port 8000) to re-acquire.
-- If `apt install` fails because of an **unrelated** broken package (e.g. a half-configured `google-android-emulator-installer` is a classic on Ubuntu), the scripts tolerate it and re-check the deps that actually matter afterwards. To clear the bad state for good:
-  ```bash
-  sudo apt remove --purge google-android-emulator-installer   # or whichever package apt complains about
-  sudo apt --fix-broken install
-  ```
 - Building `gst-plugins-rs` requires a recent rustc. `main` is in alpha and often needs the bleeding edge (1.92+). The install script auto-picks a release tag aligned with your GStreamer minor version (e.g. `gstreamer-1.26.x`, MSRV ~1.82), which works with stock `rustup` stable. Override with `GST_PLUGINS_RS_REF=<ref> ./scripts/install-gst-webrtc-plugin.sh`.
 
 ## Development
