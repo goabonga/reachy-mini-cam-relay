@@ -214,13 +214,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { arch: amd64, runs_on: ubuntu-latest, python_version: "3.11" }
-          - { arch: amd64, runs_on: ubuntu-latest, python_version: "3.12" }
-          - { arch: amd64, runs_on: ubuntu-latest, python_version: "3.13" }
-          # Uncomment once ubuntu-24.04-arm is available on your account:
-          # - { arch: arm64, runs_on: ubuntu-24.04-arm, python_version: "3.11" }
-          # - { arch: arm64, runs_on: ubuntu-24.04-arm, python_version: "3.12" }
-          # - { arch: arm64, runs_on: ubuntu-24.04-arm, python_version: "3.13" }
+          - { arch: amd64, runs_on: ubuntu-latest,    python_version: "3.11" }
+          - { arch: amd64, runs_on: ubuntu-latest,    python_version: "3.12" }
+          - { arch: amd64, runs_on: ubuntu-latest,    python_version: "3.13" }
+          - { arch: arm64, runs_on: ubuntu-24.04-arm, python_version: "3.11" }
+          - { arch: arm64, runs_on: ubuntu-24.04-arm, python_version: "3.12" }
+          - { arch: arm64, runs_on: ubuntu-24.04-arm, python_version: "3.13" }
     steps:
       - name: ⬇️ Checkout tag
         uses: actions/checkout@v4
