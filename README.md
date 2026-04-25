@@ -81,6 +81,10 @@ Resolution is auto-detected from the incoming stream. Optional flags: `--fps 30`
   ```
 - Building `gst-plugins-rs` requires a recent rustc. `main` is in alpha and often needs the bleeding edge (1.92+). The install script auto-picks a release tag aligned with your GStreamer minor version (e.g. `gstreamer-1.26.x`, MSRV ~1.82), which works with stock `rustup` stable. Override with `GST_PLUGINS_RS_REF=<ref> ./scripts/install-gst-webrtc-plugin.sh`.
 
+## Development
+
+See [CONTRIBUTING.md](https://github.com/goabonga/reachy-mini-cam-relay/blob/main/CONTRIBUTING.md) for the full contribution guide. By participating you agree to the [Code of Conduct](https://github.com/goabonga/reachy-mini-cam-relay/blob/main/CODE_OF_CONDUCT.md).
+
 ## License
 
-TBD
+[MIT](https://github.com/goabonga/reachy-mini-cam-relay/blob/main/LICENSE) © Chris
