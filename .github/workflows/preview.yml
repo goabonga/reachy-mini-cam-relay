@@ -1,0 +1,217 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Chris <goabonga@pm.me>
+
+# Build the .deb without releasing — used to test packaging changes on PRs
+# and on-demand via workflow_dispatch. No version bump, no tag, no PyPI push,
+# no GitHub release; the resulting .deb is uploaded as a workflow artifact.
+
+name: Preview .deb build
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "src/**"
+      - "packaging/**"
+      - "debian/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/preview.yml"
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_DEFAULT_VERSION: "3.11"
+
+jobs:
+  build_deb_preview:
+    name: Preview .deb (${{ matrix.arch }})
+    runs-on: ${{ matrix.runs_on }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runs_on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 🛠️ Setup uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+          python-version: ${{ env.PYTHON_DEFAULT_VERSION }}
+
+      - name: 🧰 Install system build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            dpkg-dev \
+            libcairo2-dev \
+            libgirepository1.0-dev \
+            pkg-config
+
+      - name: 📌 Resolve preview version
+        id: version
+        run: |
+          BASE=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          # Disambiguate preview builds from real releases. Debian version
+          # syntax: "~" sorts BEFORE the bare version, so a preview never
+          # masks a real release if both are dropped in the same apt cache.
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            SUFFIX="~pr$(echo ${{ github.event.pull_request.number }})"
+          else
+            SUFFIX="~dispatch.${GITHUB_RUN_NUMBER}"
+          fi
+          VERSION="${BASE}${SUFFIX}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Preview version: $VERSION"
+
+      - name: 🧱 Build venv at /opt/venvs/reachy-mini-cam-relay
+        run: |
+          FINAL_VENV=/opt/venvs/reachy-mini-cam-relay
+          sudo install -d -o "$USER" -g "$USER" /opt/venvs
+
+          export UV_PROJECT_ENVIRONMENT="$FINAL_VENV"
+          uv sync --frozen --extra head-tracking --no-dev --no-editable || \
+            uv sync --frozen --no-dev --no-editable
+
+          rm -f "$FINAL_VENV/bin/python" "$FINAL_VENV/bin/python3" "$FINAL_VENV/bin/python3.11"
+          ln -sf /usr/bin/python3.11 "$FINAL_VENV/bin/python"
+          ln -sf /usr/bin/python3.11 "$FINAL_VENV/bin/python3"
+          ln -sf /usr/bin/python3.11 "$FINAL_VENV/bin/python3.11"
+
+          find "$FINAL_VENV" -name '*.pyc' -delete
+          find "$FINAL_VENV" -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true
+
+          DEB_ROOT=deb-build
+          rm -rf "$DEB_ROOT"
+          mkdir -p "$DEB_ROOT/opt/venvs"
+          cp -a "$FINAL_VENV" "$DEB_ROOT/opt/venvs/"
+
+      - name: 📂 Stage systemd + module configs
+        run: |
+          DEB_ROOT=deb-build
+          mkdir -p $DEB_ROOT/lib/systemd/user
+          cp packaging/systemd/reachy-mini-cam-relay@.service $DEB_ROOT/lib/systemd/user/
+          mkdir -p $DEB_ROOT/etc/modules-load.d
+          cp packaging/systemd/reachy-mini-cam-relay-v4l2loopback.conf $DEB_ROOT/etc/modules-load.d/
+          mkdir -p $DEB_ROOT/etc/modprobe.d
+          cp packaging/systemd/reachy-mini-cam-relay-v4l2loopback.modprobe \
+            $DEB_ROOT/etc/modprobe.d/reachy-mini-cam-relay-v4l2loopback.conf
+
+      - name: 🎬 Bundle gst-plugins-rs webrtc plugin
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GST_PLUGINS_RS_RPI_REPO: goabonga/gst-plugins-rs-rpi
+          GST_PLUGINS_RS_RPI_TAG: ${{ vars.GST_PLUGINS_RS_RPI_TAG || '' }}
+        run: |
+          ARCH=${{ matrix.arch }}
+          DEB_ROOT=deb-build
+          case "$ARCH" in
+            amd64) GNU_TRIPLET=x86_64-linux-gnu ;;
+            arm64) GNU_TRIPLET=aarch64-linux-gnu ;;
+            *) echo "::error::unsupported arch=$ARCH"; exit 1 ;;
+          esac
+
+          mkdir -p /tmp/gst-rs
+          if [ -n "$GST_PLUGINS_RS_RPI_TAG" ]; then
+            gh release download "$GST_PLUGINS_RS_RPI_TAG" \
+              --repo "$GST_PLUGINS_RS_RPI_REPO" \
+              --pattern "gst-plugins-rs-webrtc_*_${ARCH}.deb" \
+              --dir /tmp/gst-rs
+          else
+            gh release download \
+              --repo "$GST_PLUGINS_RS_RPI_REPO" \
+              --pattern "gst-plugins-rs-webrtc_*_${ARCH}.deb" \
+              --dir /tmp/gst-rs
+          fi
+
+          DEB_FILE=$(ls /tmp/gst-rs/gst-plugins-rs-webrtc_*_${ARCH}.deb | head -1)
+          mkdir -p /tmp/gst-extracted
+          dpkg-deb -x "$DEB_FILE" /tmp/gst-extracted
+
+          mkdir -p "$DEB_ROOT/usr/lib/$GNU_TRIPLET/gstreamer-1.0"
+          cp -av /tmp/gst-extracted/usr/lib/*/gstreamer-1.0/*.so \
+            "$DEB_ROOT/usr/lib/$GNU_TRIPLET/gstreamer-1.0/"
+
+      - name: 📜 Install minimal docs (preview)
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          DEB_ROOT=deb-build
+          DOC_DIR="$DEB_ROOT/usr/share/doc/reachy-mini-cam-relay"
+          mkdir -p "$DOC_DIR"
+          if [ -f CHANGELOG.md ]; then
+            gzip -9n -c CHANGELOG.md > "$DOC_DIR/changelog.gz"
+          fi
+          DATE=$(date -R)
+          cat > /tmp/changelog.Debian <<EOF
+          reachy-mini-cam-relay ($VERSION) unstable; urgency=medium
+
+            * Preview build (not a real release).
+
+           -- Chris <goabonga@pm.me>  $DATE
+          EOF
+          gzip -9n -c /tmp/changelog.Debian > "$DOC_DIR/changelog.Debian.gz"
+          cat > "$DOC_DIR/copyright" <<'EOF'
+          Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+          Upstream-Name: reachy-mini-cam-relay
+          Upstream-Contact: Chris <goabonga@pm.me>
+          Source: https://github.com/goabonga/reachy-mini-cam-relay
+
+          Files: *
+          Copyright: 2026 Chris <goabonga@pm.me>
+          License: MIT
+          EOF
+
+      - name: 📝 Write DEBIAN/control
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          ARCH=${{ matrix.arch }}
+          DEB_ROOT=deb-build
+
+          INSTALLED_SIZE=$(du -sk $DEB_ROOT/opt $DEB_ROOT/lib $DEB_ROOT/etc $DEB_ROOT/usr 2>/dev/null \
+            | awk '{s+=$1} END {print s}')
+
+          mkdir -p $DEB_ROOT/DEBIAN
+          cat > $DEB_ROOT/DEBIAN/control <<EOF
+          Package: reachy-mini-cam-relay
+          Version: $VERSION
+          Architecture: $ARCH
+          Maintainer: Chris <goabonga@pm.me>
+          Installed-Size: $INSTALLED_SIZE
+          Depends: python3.11, v4l2loopback-dkms, pulseaudio-utils, gstreamer1.0-plugins-bad, gstreamer1.0-nice, python3-gi, gir1.2-gst-plugins-bad-1.0, libsoup-3.0-0, libnice10
+          Provides: gst-plugins-rs-webrtc
+          Conflicts: gst-plugins-rs-webrtc
+          Replaces: gst-plugins-rs-webrtc
+          Section: video
+          Priority: optional
+          Homepage: https://github.com/goabonga/reachy-mini-cam-relay
+          Description: Relay Reachy Mini camera/mic/speakers as virtual devices (PREVIEW)
+           Preview build of reachy-mini-cam-relay produced by the preview.yml
+           workflow. Not a release artifact.
+          EOF
+
+          cp debian/reachy-mini-cam-relay.postinst $DEB_ROOT/DEBIAN/postinst
+          cp debian/reachy-mini-cam-relay.prerm $DEB_ROOT/DEBIAN/prerm
+          chmod 0755 $DEB_ROOT/DEBIAN/postinst $DEB_ROOT/DEBIAN/prerm
+
+      - name: 🏗️ Build .deb
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          ARCH=${{ matrix.arch }}
+          DEB_FILE="reachy-mini-cam-relay_${VERSION}_${ARCH}.deb"
+          dpkg-deb --build --root-owner-group deb-build "$DEB_FILE"
+          ls -lh "$DEB_FILE"
+          # Sanity-check the metadata so the PR reviewer sees the contents.
+          dpkg-deb --info "$DEB_FILE"
+          dpkg-deb --contents "$DEB_FILE" | head -40
+
+      - name: 📤 Upload .deb artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: reachy-mini-cam-relay-preview-${{ matrix.arch }}
+          path: reachy-mini-cam-relay_*_${{ matrix.arch }}.deb
+          retention-days: 14
