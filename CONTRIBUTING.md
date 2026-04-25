@@ -141,3 +141,15 @@ Unit tests live in `tests/` and follow standard pytest discovery. Use `monkeypat
 4. Make sure the `Tests` CI workflow passes.
 
 5. Wait for review and address feedback if needed.
+
+### Release
+
+Releases are triggered by commits with the `chore(release):` prefix on `main` branch:
+
+```bash
+# Standard release (version bumped automatically based on conventional commits)
+git commit --allow-empty -m "chore(release): release a new version"
+
+# Stable release (bumps major version, e.g. 0.x.x → 1.0.0)
+git commit --allow-empty -m "chore(release): release a stable version"
+```
