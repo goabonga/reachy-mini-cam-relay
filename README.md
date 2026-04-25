@@ -67,7 +67,20 @@ In the meeting app, pick in each selector:
 - Microphone → **ReachyMic**
 - Speakers / audio output → **ReachySpeakers** (selectable directly in Chrome/Firefox, or via `pavucontrol` → Playback tab, per-app)
 
-Resolution is auto-detected from the incoming stream. Optional flags: `--fps 30`, `--no-mic`, `--no-speakers`.
+Resolution is auto-detected from the incoming stream. Optional flags: `--fps 30`, `--no-mic`, `--no-speakers`, `--head-track`.
+
+### Head tracking (optional)
+
+With `--head-track`, the Reachy Mini's head follows the detected face in its own camera view — keep yourself in frame by moving around. Install the extra deps first:
+
+```bash
+uv sync --extra head-tracking
+uv run reachy-mini-cam-relay --reachy-host 192.168.1.231 --head-track
+```
+
+Runs a MediaPipe Face Detection pass on the frames the relay already pulls (no extra camera cost), feeds the face's pixel coordinates to `reachy.look_at_image(...)` to get an absolute target head pose, scales the rotation/translation by 0.6 (FOV compensation, à la pollen-robotics' conversation-app pattern), and sends it via `reachy.set_target(head=...)` at 20 Hz. If no face is detected for ~2 s, the head smoothly interpolates back to neutral over 1 s. FOV / gain / sign / decay constants are at the top of `src/reachy_mini_cam_relay/head_track.py`.
+
+The model (`blaze_face_short_range.tflite`, ~200 KB) is fetched from `storage.googleapis.com/mediapipe-models/...` on first run and cached at `~/.cache/reachy-mini-cam-relay/`.
 
 ## Known pitfalls
 
