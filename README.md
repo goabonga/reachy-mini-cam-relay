@@ -96,7 +96,7 @@ It's a **user** service (not system) because the virtual mic/speakers live on th
 
 The `.deb` is built by the GitHub Actions release workflow (`.github/workflows/release.yml`, job `build_deb`). It assembles a venv with `uv sync --frozen` at `/opt/venvs/reachy-mini-cam-relay/`, stages the systemd unit + module configs + changelog/copyright, generates `DEBIAN/control` inline and runs `dpkg-deb --build`. Only `debian/reachy-mini-cam-relay.{postinst,prerm}` live in-tree — everything else is generated at build time so it can never drift from the actual release.
 
-The companion package **`gst-plugins-rs-webrtc`** (declared as `Recommends`) ships the pre-built `libgstrswebrtc.so` and is produced by [`goabonga/gst-plugins-rs-rpi`](https://github.com/goabonga/gst-plugins-rs-rpi).
+The build pipeline downloads the latest matching `gst-plugins-rs-webrtc_*_<arch>.deb` from [`goabonga/gst-plugins-rs-rpi`](https://github.com/goabonga/gst-plugins-rs-rpi) (pin a specific release via the `GST_PLUGINS_RS_RPI_TAG` repository variable), extracts the `libgstrswebrtc.so`, and bundles it inside the `reachy-mini-cam-relay.deb` at `/usr/lib/<triplet>/gstreamer-1.0/`. The control file declares `Provides: gst-plugins-rs-webrtc` (with matching `Conflicts`/`Replaces`) so the standalone companion package and the bundled one stay mutually exclusive — installing `reachy-mini-cam-relay.deb` is the only step required.
 
 ## Development
 
