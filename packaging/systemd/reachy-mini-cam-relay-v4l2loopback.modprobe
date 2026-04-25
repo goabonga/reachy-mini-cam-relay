@@ -1,0 +1,4 @@
+# /etc/modprobe.d/reachy-mini-cam-relay-v4l2loopback.conf
+# Parameters for the v4l2loopback module — exclusive_caps=1 is required so
+# Chrome/Chromium expose the virtual device in getUserMedia().
+options v4l2loopback devices=1 video_nr=10 card_label="reachy-mini-cam-relay" exclusive_caps=1
