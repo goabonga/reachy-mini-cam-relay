@@ -281,6 +281,56 @@ jobs:
           cp packaging/systemd/reachy-mini-cam-relay-v4l2loopback.modprobe \
             $DEB_ROOT/etc/modprobe.d/reachy-mini-cam-relay-v4l2loopback.conf
 
+      - name: 🎬 Bundle gst-plugins-rs webrtc plugin
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GST_PLUGINS_RS_RPI_REPO: goabonga/gst-plugins-rs-rpi
+          GST_PLUGINS_RS_RPI_TAG: ${{ vars.GST_PLUGINS_RS_RPI_TAG || '' }}
+        run: |
+          ARCH=${{ matrix.arch }}
+          DEB_ROOT=deb-build
+          case "$ARCH" in
+            amd64) GNU_TRIPLET=x86_64-linux-gnu ;;
+            arm64) GNU_TRIPLET=aarch64-linux-gnu ;;
+            *) echo "::error::unsupported arch=$ARCH"; exit 1 ;;
+          esac
+
+          # Pull the prebuilt .deb produced by goabonga/gst-plugins-rs-rpi.
+          # If GST_PLUGINS_RS_RPI_TAG is unset we grab the most recent release.
+          mkdir -p /tmp/gst-rs
+          if [ -n "$GST_PLUGINS_RS_RPI_TAG" ]; then
+            gh release download "$GST_PLUGINS_RS_RPI_TAG" \
+              --repo "$GST_PLUGINS_RS_RPI_REPO" \
+              --pattern "gst-plugins-rs-webrtc_*_${ARCH}.deb" \
+              --dir /tmp/gst-rs
+          else
+            gh release download \
+              --repo "$GST_PLUGINS_RS_RPI_REPO" \
+              --pattern "gst-plugins-rs-webrtc_*_${ARCH}.deb" \
+              --dir /tmp/gst-rs
+          fi
+
+          DEB_FILE=$(ls /tmp/gst-rs/gst-plugins-rs-webrtc_*_${ARCH}.deb | head -1)
+          if [ -z "$DEB_FILE" ]; then
+            echo "::error::No gst-plugins-rs-webrtc .deb found for arch=$ARCH"
+            exit 1
+          fi
+          echo "Bundling $(basename "$DEB_FILE")"
+
+          # Extract the upstream .deb's payload onto a scratch tree, then copy
+          # the .so into our staging dir at the standard plugin path so
+          # GStreamer auto-discovers it without GST_PLUGIN_PATH gymnastics.
+          mkdir -p /tmp/gst-extracted
+          dpkg-deb -x "$DEB_FILE" /tmp/gst-extracted
+
+          mkdir -p "$DEB_ROOT/usr/lib/$GNU_TRIPLET/gstreamer-1.0"
+          cp -av /tmp/gst-extracted/usr/lib/*/gstreamer-1.0/*.so \
+            "$DEB_ROOT/usr/lib/$GNU_TRIPLET/gstreamer-1.0/"
+
+          # Surface the bundled upstream version in the cam-relay metadata.
+          GST_RS_VERSION=$(dpkg-deb -f "$DEB_FILE" Version)
+          echo "GST_RS_VERSION=$GST_RS_VERSION" >> $GITHUB_ENV
+
       - name: 📜 Install changelog + copyright (Debian policy)
         run: |
           VERSION=${{ needs.bump_and_build.outputs.version }}
@@ -333,8 +383,10 @@ jobs:
           Architecture: $ARCH
           Maintainer: Chris <goabonga@pm.me>
           Installed-Size: $INSTALLED_SIZE
-          Depends: python3.11, v4l2loopback-dkms, pulseaudio-utils, gstreamer1.0-plugins-bad, gstreamer1.0-nice, python3-gi, gir1.2-gst-plugins-bad-1.0
-          Recommends: gst-plugins-rs-webrtc
+          Depends: python3.11, v4l2loopback-dkms, pulseaudio-utils, gstreamer1.0-plugins-bad, gstreamer1.0-nice, python3-gi, gir1.2-gst-plugins-bad-1.0, libsoup-3.0-0, libnice10
+          Provides: gst-plugins-rs-webrtc
+          Conflicts: gst-plugins-rs-webrtc
+          Replaces: gst-plugins-rs-webrtc
           Section: video
           Priority: optional
           Homepage: https://github.com/goabonga/reachy-mini-cam-relay
