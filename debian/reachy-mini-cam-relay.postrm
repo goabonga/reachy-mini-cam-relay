@@ -1,0 +1,25 @@
+#!/bin/sh
+# Clean up files Python created at runtime inside the bundled venv (mostly
+# __pycache__/*.pyc) — dpkg doesn't own them, so it leaves them and complains
+# about non-empty directories on remove.
+set -e
+
+case "$1" in
+    remove|purge)
+        if [ -d /opt/venvs/reachy-mini-cam-relay ]; then
+            rm -rf /opt/venvs/reachy-mini-cam-relay
+        fi
+        # /opt/venvs may be shared with other relay variants; only drop it if
+        # we left it empty.
+        if [ -d /opt/venvs ] && [ -z "$(ls -A /opt/venvs 2>/dev/null)" ]; then
+            rmdir /opt/venvs
+        fi
+        ;;
+    upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
+        # Leave the venv alone — the incoming version may already have unpacked
+        # its replacement files in there.
+        ;;
+esac
+
+#DEBHELPER#
+exit 0

@@ -411,7 +411,8 @@ jobs:
 
           cp debian/reachy-mini-cam-relay.postinst $DEB_ROOT/DEBIAN/postinst
           cp debian/reachy-mini-cam-relay.prerm $DEB_ROOT/DEBIAN/prerm
-          chmod 0755 $DEB_ROOT/DEBIAN/postinst $DEB_ROOT/DEBIAN/prerm
+          cp debian/reachy-mini-cam-relay.postrm $DEB_ROOT/DEBIAN/postrm
+          chmod 0755 $DEB_ROOT/DEBIAN/postinst $DEB_ROOT/DEBIAN/prerm $DEB_ROOT/DEBIAN/postrm
 
       - name: 🏗️ Build .deb
         run: |
