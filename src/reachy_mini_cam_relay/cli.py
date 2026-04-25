@@ -92,8 +92,11 @@ def _connect_with_backoff(
     return None
 
 
-def _mic_loop(session: Session, proc: subprocess.Popen, stop_event: threading.Event):
+def _mic_loop(
+    session: Session, proc: subprocess.Popen, stop_event: threading.Event
+) -> None:
     """Pipe Reachy mic audio to pacat; push silence when disconnected."""
+    assert proc.stdin is not None  # spawned with stdin=PIPE
     silence_bytes = SILENCE_CHUNK.tobytes()
     silence_period = AUDIO_CHUNK_SAMPLES / AUDIO_RATE
     while not stop_event.is_set():
@@ -121,8 +124,9 @@ def _mic_loop(session: Session, proc: subprocess.Popen, stop_event: threading.Ev
 
 def _speakers_loop(
     session: Session, proc: subprocess.Popen, stop_event: threading.Event
-):
+) -> None:
     """Pull browser audio from parec; forward to Reachy or drop when disconnected."""
+    assert proc.stdout is not None  # spawned with stdout=PIPE
     while not stop_event.is_set():
         data = proc.stdout.read(AUDIO_CHUNK_BYTES)
         if not data:
