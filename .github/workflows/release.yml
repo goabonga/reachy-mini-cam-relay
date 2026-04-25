@@ -206,7 +206,7 @@ jobs:
   # Build .deb packages (matrix over arch)
   # ============================================
   build_deb:
-    name: Build .deb (${{ matrix.arch }})
+    name: Build .deb (${{ matrix.arch }} / py${{ matrix.python_version }})
     runs-on: ${{ matrix.runs_on }}
     needs: [bump_and_build]
     if: needs.bump_and_build.outputs.version != ''
@@ -214,11 +214,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - arch: amd64
-            runs_on: ubuntu-latest
+          - { arch: amd64, runs_on: ubuntu-latest, python_version: "3.11" }
+          - { arch: amd64, runs_on: ubuntu-latest, python_version: "3.12" }
+          - { arch: amd64, runs_on: ubuntu-latest, python_version: "3.13" }
           # Uncomment once ubuntu-24.04-arm is available on your account:
-          # - arch: arm64
-          #   runs_on: ubuntu-24.04-arm
+          # - { arch: arm64, runs_on: ubuntu-24.04-arm, python_version: "3.11" }
+          # - { arch: arm64, runs_on: ubuntu-24.04-arm, python_version: "3.12" }
+          # - { arch: arm64, runs_on: ubuntu-24.04-arm, python_version: "3.13" }
     steps:
       - name: ⬇️ Checkout tag
         uses: actions/checkout@v4
@@ -229,7 +231,7 @@ jobs:
         uses: astral-sh/setup-uv@v4
         with:
           enable-cache: true
-          python-version: ${{ env.PYTHON_DEFAULT_VERSION }}
+          python-version: ${{ matrix.python_version }}
 
       - name: 📦 Install packaging tools
         run: |
@@ -254,11 +256,12 @@ jobs:
           uv sync --frozen --extra head-tracking --no-dev --no-editable
 
           # Replace the Python symlink (which points at the runner's Python)
-          # with one targeting the target system's /usr/bin/python3.11.
-          rm -f "$FINAL_VENV/bin/python" "$FINAL_VENV/bin/python3" "$FINAL_VENV/bin/python3.11"
-          ln -sf /usr/bin/python3.11 "$FINAL_VENV/bin/python"
-          ln -sf /usr/bin/python3.11 "$FINAL_VENV/bin/python3"
-          ln -sf /usr/bin/python3.11 "$FINAL_VENV/bin/python3.11"
+          # with one targeting the target system's /usr/bin/python<py>.
+          PY="${{ matrix.python_version }}"
+          rm -f "$FINAL_VENV/bin/python" "$FINAL_VENV/bin/python3" "$FINAL_VENV/bin/python$PY"
+          ln -sf "/usr/bin/python$PY" "$FINAL_VENV/bin/python"
+          ln -sf "/usr/bin/python$PY" "$FINAL_VENV/bin/python3"
+          ln -sf "/usr/bin/python$PY" "$FINAL_VENV/bin/python$PY"
 
           # Strip bytecode for a smaller deb
           find "$FINAL_VENV" -name '*.pyc' -delete
@@ -369,7 +372,12 @@ jobs:
 
       - name: 📝 Write DEBIAN metadata
         run: |
-          VERSION=${{ needs.bump_and_build.outputs.version }}
+          # Suffix the Debian version with the targeted Python ABI so the
+          # three .debs we ship per arch don't masquerade as the same package.
+          # "+pyX.Y" is treated as a local-version qualifier by dpkg.
+          BASE_VERSION=${{ needs.bump_and_build.outputs.version }}
+          PY="${{ matrix.python_version }}"
+          VERSION="${BASE_VERSION}+py${PY}"
           ARCH=${{ matrix.arch }}
           DEB_ROOT=deb-build
 
@@ -383,19 +391,22 @@ jobs:
           Architecture: $ARCH
           Maintainer: Chris <goabonga@pm.me>
           Installed-Size: $INSTALLED_SIZE
-          Depends: python3.11, v4l2loopback-dkms, pulseaudio-utils, gstreamer1.0-plugins-bad, gstreamer1.0-nice, python3-gi, gir1.2-gst-plugins-bad-1.0, libsoup-3.0-0, libnice10
+          Depends: python$PY, v4l2loopback-dkms, pulseaudio-utils, gstreamer1.0-plugins-bad, gstreamer1.0-nice, python3-gi, gir1.2-gst-plugins-bad-1.0, libsoup-3.0-0, libnice10
           Provides: gst-plugins-rs-webrtc
           Conflicts: gst-plugins-rs-webrtc
           Replaces: gst-plugins-rs-webrtc
           Section: video
           Priority: optional
           Homepage: https://github.com/goabonga/reachy-mini-cam-relay
-          Description: Relay Reachy Mini camera/mic/speakers as virtual devices
+          Description: Relay Reachy Mini camera/mic/speakers as virtual devices (Python $PY runtime)
            reachy-mini-cam-relay bridges a Reachy Mini's WebRTC stream into standard Linux
            virtual devices (v4l2loopback camera, PulseAudio null-sink mic +
            speakers) so browser video apps (Jitsi, Google Meet, Teams, Discord)
            see the robot as a regular webcam and microphone. Includes optional
            head-tracking and transparent reconnection.
+           .
+           This build embeds a Python $PY virtual environment; install the
+           variant that matches your distribution's default Python.
           EOF
 
           cp debian/reachy-mini-cam-relay.postinst $DEB_ROOT/DEBIAN/postinst
@@ -404,8 +415,10 @@ jobs:
 
       - name: 🏗️ Build .deb
         run: |
-          VERSION=${{ needs.bump_and_build.outputs.version }}
+          BASE_VERSION=${{ needs.bump_and_build.outputs.version }}
+          PY="${{ matrix.python_version }}"
           ARCH=${{ matrix.arch }}
+          VERSION="${BASE_VERSION}+py${PY}"
           DEB_FILE="reachy-mini-cam-relay_${VERSION}_${ARCH}.deb"
           dpkg-deb --build --root-owner-group deb-build "$DEB_FILE"
           ls -lh "$DEB_FILE"
@@ -413,7 +426,7 @@ jobs:
       - name: 📤 Upload .deb artifact
         uses: actions/upload-artifact@v4
         with:
-          name: deb-${{ matrix.arch }}
+          name: deb-${{ matrix.arch }}-py${{ matrix.python_version }}
           path: reachy-mini-cam-relay_*_${{ matrix.arch }}.deb
 
   # ============================================

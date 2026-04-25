@@ -22,19 +22,17 @@ on:
 permissions:
   contents: read
 
-env:
-  PYTHON_DEFAULT_VERSION: "3.11"
-
 jobs:
   build_deb_preview:
-    name: Preview .deb (${{ matrix.arch }})
+    name: Preview .deb (${{ matrix.arch }} / py${{ matrix.python_version }})
     runs-on: ${{ matrix.runs_on }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - arch: amd64
-            runs_on: ubuntu-latest
+          - { arch: amd64, runs_on: ubuntu-latest, python_version: "3.11" }
+          - { arch: amd64, runs_on: ubuntu-latest, python_version: "3.12" }
+          - { arch: amd64, runs_on: ubuntu-latest, python_version: "3.13" }
     steps:
       - uses: actions/checkout@v4
 
@@ -42,7 +40,7 @@ jobs:
         uses: astral-sh/setup-uv@v4
         with:
           enable-cache: true
-          python-version: ${{ env.PYTHON_DEFAULT_VERSION }}
+          python-version: ${{ matrix.python_version }}
 
       - name: 🧰 Install system build deps
         run: |
@@ -60,13 +58,15 @@ jobs:
           # Disambiguate preview builds from real releases. Debian version
           # syntax: "~" sorts BEFORE the bare version, so a preview never
           # masks a real release if both are dropped in the same apt cache.
+          PY="${{ matrix.python_version }}"
           if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
             SUFFIX="~pr$(echo ${{ github.event.pull_request.number }})"
           else
             SUFFIX="~dispatch.${GITHUB_RUN_NUMBER}"
           fi
-          VERSION="${BASE}${SUFFIX}"
+          VERSION="${BASE}+py${PY}${SUFFIX}"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "py=$PY" >> $GITHUB_OUTPUT
           echo "Preview version: $VERSION"
 
       - name: 🧱 Build venv at /opt/venvs/reachy-mini-cam-relay
@@ -78,10 +78,11 @@ jobs:
           uv sync --frozen --extra head-tracking --no-dev --no-editable || \
             uv sync --frozen --no-dev --no-editable
 
-          rm -f "$FINAL_VENV/bin/python" "$FINAL_VENV/bin/python3" "$FINAL_VENV/bin/python3.11"
-          ln -sf /usr/bin/python3.11 "$FINAL_VENV/bin/python"
-          ln -sf /usr/bin/python3.11 "$FINAL_VENV/bin/python3"
-          ln -sf /usr/bin/python3.11 "$FINAL_VENV/bin/python3.11"
+          PY="${{ matrix.python_version }}"
+          rm -f "$FINAL_VENV/bin/python" "$FINAL_VENV/bin/python3" "$FINAL_VENV/bin/python$PY"
+          ln -sf "/usr/bin/python$PY" "$FINAL_VENV/bin/python"
+          ln -sf "/usr/bin/python$PY" "$FINAL_VENV/bin/python3"
+          ln -sf "/usr/bin/python$PY" "$FINAL_VENV/bin/python$PY"
 
           find "$FINAL_VENV" -name '*.pyc' -delete
           find "$FINAL_VENV" -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true
@@ -182,7 +183,7 @@ jobs:
           Architecture: $ARCH
           Maintainer: Chris <goabonga@pm.me>
           Installed-Size: $INSTALLED_SIZE
-          Depends: python3.11, v4l2loopback-dkms, pulseaudio-utils, gstreamer1.0-plugins-bad, gstreamer1.0-nice, python3-gi, gir1.2-gst-plugins-bad-1.0, libsoup-3.0-0, libnice10
+          Depends: python${{ matrix.python_version }}, v4l2loopback-dkms, pulseaudio-utils, gstreamer1.0-plugins-bad, gstreamer1.0-nice, python3-gi, gir1.2-gst-plugins-bad-1.0, libsoup-3.0-0, libnice10
           Provides: gst-plugins-rs-webrtc
           Conflicts: gst-plugins-rs-webrtc
           Replaces: gst-plugins-rs-webrtc
@@ -212,6 +213,6 @@ jobs:
       - name: 📤 Upload .deb artifact
         uses: actions/upload-artifact@v4
         with:
-          name: reachy-mini-cam-relay-preview-${{ matrix.arch }}
+          name: reachy-mini-cam-relay-preview-${{ matrix.arch }}-py${{ matrix.python_version }}
           path: reachy-mini-cam-relay_*_${{ matrix.arch }}.deb
           retention-days: 14
