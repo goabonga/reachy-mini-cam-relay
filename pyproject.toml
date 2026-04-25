@@ -1,6 +1,6 @@
 [project]
 name = "reachy-mini-cam-relay"
-version = "0.1.0"
+version = "0.0.0"
 description = "Relay the Reachy Mini camera, microphone and speakers as Linux virtual devices for use in any browser meeting app"
 readme = "README.md"
 requires-python = ">=3.11"
