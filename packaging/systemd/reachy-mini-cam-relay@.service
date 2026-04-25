@@ -1,0 +1,38 @@
+# Template user service:
+#   systemctl --user enable --now reachy-mini-cam-relay@<host>
+# e.g.
+#   systemctl --user enable --now reachy-mini-cam-relay@192.168.1.231
+#
+# Runs as a USER service because the virtual mic/speakers live on the
+# PulseAudio/PipeWire server of the user session, not on the system bus.
+
+[Unit]
+Description=reachy-mini-cam-relay: virtual cam/mic/speakers for Reachy Mini (host=%i)
+After=pipewire.service pipewire-pulse.service
+Wants=pipewire.service pipewire-pulse.service
+
+[Service]
+Type=simple
+# --reachy-host is passed via the instance name (%i).
+# Extra flags live in the drop-in:
+#   ~/.config/systemd/user/reachy-mini-cam-relay@.service.d/override.conf
+# Example:
+#   [Service]
+#   Environment=RELAY_DEVICE=/dev/video10
+#   ExecStart=
+#   ExecStart=/usr/bin/reachy-mini-cam-relay --reachy-host %i --device ${RELAY_DEVICE} --head-track
+ExecStart=/usr/bin/reachy-mini-cam-relay --reachy-host %i --device /dev/video10
+
+# The CLI handles reconnect internally, so Restart is only for hard crashes.
+Restart=on-failure
+RestartSec=10
+# Kill the whole process group so pacat/parec subprocesses die with us.
+KillMode=control-group
+TimeoutStopSec=10
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=reachy-mini-cam-relay
+
+[Install]
+WantedBy=default.target

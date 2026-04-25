@@ -203,12 +203,239 @@ jobs:
             LATEST_CHANGELOG.md
 
   # ============================================
+  # Build .deb packages (matrix over arch)
+  # ============================================
+  build_deb:
+    name: Build .deb (${{ matrix.arch }} / py${{ matrix.python_version }})
+    runs-on: ${{ matrix.runs_on }}
+    needs: [bump_and_build]
+    if: needs.bump_and_build.outputs.version != ''
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: amd64, runs_on: ubuntu-latest,    python_version: "3.11" }
+          - { arch: amd64, runs_on: ubuntu-latest,    python_version: "3.12" }
+          - { arch: amd64, runs_on: ubuntu-latest,    python_version: "3.13" }
+          - { arch: arm64, runs_on: ubuntu-24.04-arm, python_version: "3.11" }
+          - { arch: arm64, runs_on: ubuntu-24.04-arm, python_version: "3.12" }
+          - { arch: arm64, runs_on: ubuntu-24.04-arm, python_version: "3.13" }
+    steps:
+      - name: ⬇️ Checkout tag
+        uses: actions/checkout@v4
+        with:
+          ref: v${{ needs.bump_and_build.outputs.version }}
+
+      - name: 🛠️ Setup uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+          python-version: ${{ matrix.python_version }}
+
+      - name: 📦 Install packaging tools
+        run: |
+          sudo apt-get update
+          # dpkg-dev for the .deb tooling, plus libcairo2-dev /
+          # libgirepository1.0-dev (legacy API used by pygobject 3.46) for
+          # the pycairo + pygobject source builds pulled in by reachy-mini.
+          sudo apt-get install -y --no-install-recommends \
+            dpkg-dev \
+            libcairo2-dev \
+            libgirepository1.0-dev \
+            pkg-config
+
+      - name: 🧱 Build venv at /opt/venvs/reachy-mini-cam-relay (via uv sync --frozen)
+        run: |
+          FINAL_VENV=/opt/venvs/reachy-mini-cam-relay
+          sudo install -d -o "$USER" -g "$USER" /opt/venvs
+
+          # Build AT the final install path so script shebangs point to the
+          # right python before we package. --frozen enforces uv.lock.
+          export UV_PROJECT_ENVIRONMENT="$FINAL_VENV"
+          uv sync --frozen --extra head-tracking --no-dev --no-editable
+
+          # Replace the Python symlink (which points at the runner's Python)
+          # with one targeting the target system's /usr/bin/python<py>.
+          PY="${{ matrix.python_version }}"
+          rm -f "$FINAL_VENV/bin/python" "$FINAL_VENV/bin/python3" "$FINAL_VENV/bin/python$PY"
+          ln -sf "/usr/bin/python$PY" "$FINAL_VENV/bin/python"
+          ln -sf "/usr/bin/python$PY" "$FINAL_VENV/bin/python3"
+          ln -sf "/usr/bin/python$PY" "$FINAL_VENV/bin/python$PY"
+
+          # Strip bytecode for a smaller deb
+          find "$FINAL_VENV" -name '*.pyc' -delete
+          find "$FINAL_VENV" -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true
+
+          # Copy the (now-relocatable) venv tree into the deb staging dir
+          DEB_ROOT=deb-build
+          rm -rf "$DEB_ROOT"
+          mkdir -p "$DEB_ROOT/opt/venvs"
+          cp -a "$FINAL_VENV" "$DEB_ROOT/opt/venvs/"
+
+      - name: 📂 Stage systemd + module configs
+        run: |
+          DEB_ROOT=deb-build
+          mkdir -p $DEB_ROOT/lib/systemd/user
+          cp packaging/systemd/reachy-mini-cam-relay@.service $DEB_ROOT/lib/systemd/user/
+          mkdir -p $DEB_ROOT/etc/modules-load.d
+          cp packaging/systemd/reachy-mini-cam-relay-v4l2loopback.conf $DEB_ROOT/etc/modules-load.d/
+          mkdir -p $DEB_ROOT/etc/modprobe.d
+          cp packaging/systemd/reachy-mini-cam-relay-v4l2loopback.modprobe \
+            $DEB_ROOT/etc/modprobe.d/reachy-mini-cam-relay-v4l2loopback.conf
+
+      - name: 🎬 Bundle gst-plugins-rs webrtc plugin
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GST_PLUGINS_RS_RPI_REPO: goabonga/gst-plugins-rs-rpi
+          GST_PLUGINS_RS_RPI_TAG: ${{ vars.GST_PLUGINS_RS_RPI_TAG || '' }}
+        run: |
+          ARCH=${{ matrix.arch }}
+          DEB_ROOT=deb-build
+          case "$ARCH" in
+            amd64) GNU_TRIPLET=x86_64-linux-gnu ;;
+            arm64) GNU_TRIPLET=aarch64-linux-gnu ;;
+            *) echo "::error::unsupported arch=$ARCH"; exit 1 ;;
+          esac
+
+          # Pull the prebuilt .deb produced by goabonga/gst-plugins-rs-rpi.
+          # If GST_PLUGINS_RS_RPI_TAG is unset we grab the most recent release.
+          mkdir -p /tmp/gst-rs
+          if [ -n "$GST_PLUGINS_RS_RPI_TAG" ]; then
+            gh release download "$GST_PLUGINS_RS_RPI_TAG" \
+              --repo "$GST_PLUGINS_RS_RPI_REPO" \
+              --pattern "gst-plugins-rs-webrtc_*_${ARCH}.deb" \
+              --dir /tmp/gst-rs
+          else
+            gh release download \
+              --repo "$GST_PLUGINS_RS_RPI_REPO" \
+              --pattern "gst-plugins-rs-webrtc_*_${ARCH}.deb" \
+              --dir /tmp/gst-rs
+          fi
+
+          DEB_FILE=$(ls /tmp/gst-rs/gst-plugins-rs-webrtc_*_${ARCH}.deb | head -1)
+          if [ -z "$DEB_FILE" ]; then
+            echo "::error::No gst-plugins-rs-webrtc .deb found for arch=$ARCH"
+            exit 1
+          fi
+          echo "Bundling $(basename "$DEB_FILE")"
+
+          # Extract the upstream .deb's payload onto a scratch tree, then copy
+          # the .so into our staging dir at the standard plugin path so
+          # GStreamer auto-discovers it without GST_PLUGIN_PATH gymnastics.
+          mkdir -p /tmp/gst-extracted
+          dpkg-deb -x "$DEB_FILE" /tmp/gst-extracted
+
+          mkdir -p "$DEB_ROOT/usr/lib/$GNU_TRIPLET/gstreamer-1.0"
+          cp -av /tmp/gst-extracted/usr/lib/*/gstreamer-1.0/*.so \
+            "$DEB_ROOT/usr/lib/$GNU_TRIPLET/gstreamer-1.0/"
+
+          # Surface the bundled upstream version in the cam-relay metadata.
+          GST_RS_VERSION=$(dpkg-deb -f "$DEB_FILE" Version)
+          echo "GST_RS_VERSION=$GST_RS_VERSION" >> $GITHUB_ENV
+
+      - name: 📜 Install changelog + copyright (Debian policy)
+        run: |
+          VERSION=${{ needs.bump_and_build.outputs.version }}
+          DEB_ROOT=deb-build
+          DOC_DIR="$DEB_ROOT/usr/share/doc/reachy-mini-cam-relay"
+          mkdir -p "$DOC_DIR"
+
+          # Upstream changelog — commitizen keeps CHANGELOG.md current as of the
+          # tag we checked out, so it's always in sync with the package version.
+          if [ -f CHANGELOG.md ]; then
+            gzip -9n -c CHANGELOG.md > "$DOC_DIR/changelog.gz"
+          fi
+
+          # Debian-format packaging changelog for this release.
+          DATE=$(date -R)
+          cat > /tmp/changelog.Debian <<EOF
+          reachy-mini-cam-relay ($VERSION) unstable; urgency=medium
+
+            * Release v$VERSION. See /usr/share/doc/reachy-mini-cam-relay/changelog.gz for details.
+
+           -- Chris <goabonga@pm.me>  $DATE
+          EOF
+          gzip -9n -c /tmp/changelog.Debian > "$DOC_DIR/changelog.Debian.gz"
+
+          # Copyright file (required by Debian policy §12.5).
+          cat > "$DOC_DIR/copyright" <<'EOF'
+          Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+          Upstream-Name: reachy-mini-cam-relay
+          Upstream-Contact: Chris <goabonga@pm.me>
+          Source: https://github.com/goabonga/reachy-mini-cam-relay
+
+          Files: *
+          Copyright: 2026 Chris <goabonga@pm.me>
+          License: MIT
+          EOF
+
+      - name: 📝 Write DEBIAN metadata
+        run: |
+          # Suffix the Debian version with the targeted Python ABI so the
+          # three .debs we ship per arch don't masquerade as the same package.
+          # "+pyX.Y" is treated as a local-version qualifier by dpkg.
+          BASE_VERSION=${{ needs.bump_and_build.outputs.version }}
+          PY="${{ matrix.python_version }}"
+          VERSION="${BASE_VERSION}+py${PY}"
+          ARCH=${{ matrix.arch }}
+          DEB_ROOT=deb-build
+
+          INSTALLED_SIZE=$(du -sk $DEB_ROOT/opt $DEB_ROOT/lib $DEB_ROOT/etc $DEB_ROOT/usr 2>/dev/null \
+            | awk '{s+=$1} END {print s}')
+
+          mkdir -p $DEB_ROOT/DEBIAN
+          cat > $DEB_ROOT/DEBIAN/control <<EOF
+          Package: reachy-mini-cam-relay
+          Version: $VERSION
+          Architecture: $ARCH
+          Maintainer: Chris <goabonga@pm.me>
+          Installed-Size: $INSTALLED_SIZE
+          Depends: python$PY, v4l2loopback-dkms, pulseaudio-utils, gstreamer1.0-plugins-bad, gstreamer1.0-nice, python3-gi, gir1.2-gst-plugins-bad-1.0, libsoup-3.0-0, libnice10
+          Provides: gst-plugins-rs-webrtc
+          Conflicts: gst-plugins-rs-webrtc
+          Replaces: gst-plugins-rs-webrtc
+          Section: video
+          Priority: optional
+          Homepage: https://github.com/goabonga/reachy-mini-cam-relay
+          Description: Relay Reachy Mini camera/mic/speakers as virtual devices (Python $PY runtime)
+           reachy-mini-cam-relay bridges a Reachy Mini's WebRTC stream into standard Linux
+           virtual devices (v4l2loopback camera, PulseAudio null-sink mic +
+           speakers) so browser video apps (Jitsi, Google Meet, Teams, Discord)
+           see the robot as a regular webcam and microphone. Includes optional
+           head-tracking and transparent reconnection.
+           .
+           This build embeds a Python $PY virtual environment; install the
+           variant that matches your distribution's default Python.
+          EOF
+
+          cp debian/reachy-mini-cam-relay.postinst $DEB_ROOT/DEBIAN/postinst
+          cp debian/reachy-mini-cam-relay.prerm $DEB_ROOT/DEBIAN/prerm
+          cp debian/reachy-mini-cam-relay.postrm $DEB_ROOT/DEBIAN/postrm
+          chmod 0755 $DEB_ROOT/DEBIAN/postinst $DEB_ROOT/DEBIAN/prerm $DEB_ROOT/DEBIAN/postrm
+
+      - name: 🏗️ Build .deb
+        run: |
+          BASE_VERSION=${{ needs.bump_and_build.outputs.version }}
+          PY="${{ matrix.python_version }}"
+          ARCH=${{ matrix.arch }}
+          VERSION="${BASE_VERSION}+py${PY}"
+          DEB_FILE="reachy-mini-cam-relay_${VERSION}_${ARCH}.deb"
+          dpkg-deb --build --root-owner-group deb-build "$DEB_FILE"
+          ls -lh "$DEB_FILE"
+
+      - name: 📤 Upload .deb artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: deb-${{ matrix.arch }}-py${{ matrix.python_version }}
+          path: reachy-mini-cam-relay_*_${{ matrix.arch }}.deb
+
+  # ============================================
   # Create GitHub Release
   # ============================================
   github_release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
-    needs: [bump_and_build]
+    needs: [bump_and_build, build_deb]
     if: needs.bump_and_build.outputs.version != ''
     steps:
       - name: 📥 Download Python artifacts
@@ -216,6 +443,13 @@ jobs:
         with:
           name: python-dist
           path: python-dist
+
+      - name: 📥 Download .deb artifacts
+        uses: actions/download-artifact@v5
+        with:
+          pattern: deb-*
+          merge-multiple: true
+          path: debs
 
       - name: 🚀 Create GitHub release
         uses: softprops/action-gh-release@v2
@@ -225,6 +459,7 @@ jobs:
           body_path: python-dist/LATEST_CHANGELOG.md
           files: |
             python-dist/dist/*
+            debs/*.deb
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
 

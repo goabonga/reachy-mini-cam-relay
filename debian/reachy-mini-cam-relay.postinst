@@ -1,0 +1,18 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    configure)
+        # Load v4l2loopback with the right parameters right away instead of
+        # waiting for a reboot.
+        if command -v modprobe >/dev/null; then
+            modprobe -r v4l2loopback 2>/dev/null || true
+            modprobe v4l2loopback 2>/dev/null || true
+        fi
+        # Expose a /usr/bin entrypoint pointing at the bundled venv.
+        ln -sf /opt/venvs/reachy-mini-cam-relay/bin/reachy-mini-cam-relay /usr/bin/reachy-mini-cam-relay
+        ;;
+esac
+
+#DEBHELPER#
+exit 0

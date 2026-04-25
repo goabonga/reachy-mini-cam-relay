@@ -76,6 +76,28 @@ Resolution is auto-detected from the incoming stream. Optional flags: `--fps 30`
 - The Reachy daemon may hold the camera exclusively. If frames never arrive, hit `POST /api/media/acquire` on the dashboard (port 8000) to re-acquire.
 - Building `gst-plugins-rs` requires a recent rustc. `main` is in alpha and often needs the bleeding edge (1.92+). The install script auto-picks a release tag aligned with your GStreamer minor version (e.g. `gstreamer-1.26.x`, MSRV ~1.82), which works with stock `rustup` stable. Override with `GST_PLUGINS_RS_REF=<ref> ./scripts/install-gst-webrtc-plugin.sh`.
 
+## Production deployment
+
+### systemd (user service)
+
+Shipped as `packaging/systemd/reachy-mini-cam-relay@.service` — a **template user unit** (the Reachy's IP goes in the instance name):
+
+```bash
+install -Dm644 packaging/systemd/reachy-mini-cam-relay@.service \
+    ~/.config/systemd/user/reachy-mini-cam-relay@.service
+systemctl --user daemon-reload
+systemctl --user enable --now reachy-mini-cam-relay@192.168.1.231
+journalctl --user -u reachy-mini-cam-relay@192.168.1.231 -f
+```
+
+It's a **user** service (not system) because the virtual mic/speakers live on the per-session PulseAudio/PipeWire server. Auto-load of `v4l2loopback` at boot is a separate system-level concern handled by `packaging/systemd/reachy-mini-cam-relay-v4l2loopback.{conf,modprobe}` (installed to `/etc/modules-load.d/` and `/etc/modprobe.d/` by the `.deb`).
+
+### Debian package
+
+The `.deb` is built by the GitHub Actions release workflow (`.github/workflows/release.yml`, job `build_deb`). It assembles a venv with `uv sync --frozen` at `/opt/venvs/reachy-mini-cam-relay/`, stages the systemd unit + module configs + changelog/copyright, generates `DEBIAN/control` inline and runs `dpkg-deb --build`. Only `debian/reachy-mini-cam-relay.{postinst,prerm}` live in-tree — everything else is generated at build time so it can never drift from the actual release.
+
+The build pipeline downloads the latest matching `gst-plugins-rs-webrtc_*_<arch>.deb` from [`goabonga/gst-plugins-rs-rpi`](https://github.com/goabonga/gst-plugins-rs-rpi) (pin a specific release via the `GST_PLUGINS_RS_RPI_TAG` repository variable), extracts the `libgstrswebrtc.so`, and bundles it inside the `reachy-mini-cam-relay.deb` at `/usr/lib/<triplet>/gstreamer-1.0/`. The control file declares `Provides: gst-plugins-rs-webrtc` (with matching `Conflicts`/`Replaces`) so the standalone companion package and the bundled one stay mutually exclusive — installing `reachy-mini-cam-relay.deb` is the only step required.
+
 ## Development
 
 See [CONTRIBUTING.md](https://github.com/goabonga/reachy-mini-cam-relay/blob/main/CONTRIBUTING.md) for the full contribution guide. By participating you agree to the [Code of Conduct](https://github.com/goabonga/reachy-mini-cam-relay/blob/main/CODE_OF_CONDUCT.md).
