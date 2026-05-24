@@ -1,0 +1,7 @@
+reachy-mini-cam-relay (0.1.0-1) unstable; urgency=medium
+
+  * feat: Relay Reachy Mini camera, mic and speakers as Linux virtual devices with automatic reconnection
+  * fix(cli): Drop unused typing.Tuple import flagged by ruff F401
+  * fix(cli): Assert proc.stdin/stdout non-None for mypy strict union-attr
+
+ -- Chris <goabonga@pm.me>  Sun, 24 May 2026 22:39:22 +0000
