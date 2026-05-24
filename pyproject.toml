@@ -90,6 +90,22 @@ ignore_missing_imports = true
 target-version = "py311"
 line-length = 100
 
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "UP",   # pyupgrade
+    "SIM",  # flake8-simplify
+]
+# E501 (line length) is enforced by the formatter, not the linter.
+ignore = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
 [tool.commitizen]
 name = "cz_conventional_commits"
 version_provider = "pep621"

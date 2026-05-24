@@ -175,9 +175,11 @@ def test_main_spawns_and_terminates_audio_subprocesses(
     fake_camera_cm.__enter__.return_value = fake_cam
     fake_camera_cm.__exit__.return_value = None
 
-    with patch.object(cli.pyvirtualcam, "Camera", return_value=fake_camera_cm):
-        with pytest.raises(_StopVideo):
-            cli.main()
+    with (
+        patch.object(cli.pyvirtualcam, "Camera", return_value=fake_camera_cm),
+        pytest.raises(_StopVideo),
+    ):
+        cli.main()
 
     # Both subprocesses must be terminated, regardless of how the loop exited.
     assert len(spawned) == 2
@@ -225,9 +227,11 @@ def test_main_kills_proc_when_terminate_times_out(
     fake_camera_cm.__enter__.return_value = fake_cam
     fake_camera_cm.__exit__.return_value = None
 
-    with patch.object(cli.pyvirtualcam, "Camera", return_value=fake_camera_cm):
-        with pytest.raises(_StopVideo):
-            cli.main()
+    with (
+        patch.object(cli.pyvirtualcam, "Camera", return_value=fake_camera_cm),
+        pytest.raises(_StopVideo),
+    ):
+        cli.main()
 
     for proc in spawned:
         proc.kill.assert_called()
@@ -432,9 +436,11 @@ def test_main_treats_get_frame_exception_as_missing_frame(
     fake_camera_cm.__enter__.return_value = fake_cam
     fake_camera_cm.__exit__.return_value = None
 
-    with patch.object(cli.pyvirtualcam, "Camera", return_value=fake_camera_cm):
-        with pytest.raises(_StopVideo):
-            cli.main()
+    with (
+        patch.object(cli.pyvirtualcam, "Camera", return_value=fake_camera_cm),
+        pytest.raises(_StopVideo),
+    ):
+        cli.main()
 
     assert len(connect_calls) >= 2  # the get_frame exception triggered a reconnect
 
@@ -474,11 +480,13 @@ def test_main_swallows_exception_from_proc_stdin_close(
     fake_camera_cm.__enter__.return_value = fake_cam
     fake_camera_cm.__exit__.return_value = None
 
-    with patch.object(cli.pyvirtualcam, "Camera", return_value=fake_camera_cm):
-        # The OSError from stdin.close() must NOT propagate — only _StopVideo
-        # (raised by sleep_until_next_frame) should escape.
-        with pytest.raises(_StopVideo):
-            cli.main()
+    # The OSError from stdin.close() must NOT propagate — only _StopVideo
+    # (raised by sleep_until_next_frame) should escape.
+    with (
+        patch.object(cli.pyvirtualcam, "Camera", return_value=fake_camera_cm),
+        pytest.raises(_StopVideo),
+    ):
+        cli.main()
 
 
 def test_main_signal_handler_announces_shutdown_only_once(

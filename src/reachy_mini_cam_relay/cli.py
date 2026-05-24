@@ -1,11 +1,11 @@
 import argparse
+import contextlib
 import shutil
 import signal
 import subprocess
 import sys
 import threading
 import time
-from typing import Optional
 
 import numpy as np
 import pyvirtualcam
@@ -33,14 +33,14 @@ class Session:
     """
 
     def __init__(self) -> None:
-        self.media: Optional[MediaManager] = None
+        self.media: MediaManager | None = None
         self._lock = threading.Lock()
 
-    def set(self, media: Optional[MediaManager]) -> None:
+    def set(self, media: MediaManager | None) -> None:
         with self._lock:
             self.media = media
 
-    def clear(self) -> Optional[MediaManager]:
+    def clear(self) -> MediaManager | None:
         with self._lock:
             m = self.media
             self.media = None
@@ -63,15 +63,13 @@ def _connect(host: str) -> MediaManager:
     return MediaManager(backend=MediaBackend.WEBRTC, signalling_host=host)
 
 
-def _close(media: Optional[MediaManager]) -> None:
+def _close(media: MediaManager | None) -> None:
     if media is not None:
-        try:
+        with contextlib.suppress(Exception):
             media.close()
-        except Exception:
-            pass
 
 
-def _connect_with_backoff(host: str, stop_event: threading.Event) -> Optional[MediaManager]:
+def _connect_with_backoff(host: str, stop_event: threading.Event) -> MediaManager | None:
     attempt = 0
     while not stop_event.is_set():
         try:
@@ -129,10 +127,8 @@ def _speakers_loop(session: Session, proc: subprocess.Popen, stop_event: threadi
         if media is None:
             continue
         samples = np.frombuffer(data, dtype=np.float32).reshape(-1, AUDIO_CHANNELS)
-        try:
+        with contextlib.suppress(Exception):
             media.push_audio_sample(samples)
-        except Exception:
-            pass
 
 
 def main() -> int:
@@ -183,8 +179,8 @@ def main() -> int:
     pacat = shutil.which("pacat")
     parec = shutil.which("parec")
 
-    mic_proc: Optional[subprocess.Popen] = None
-    spk_proc: Optional[subprocess.Popen] = None
+    mic_proc: subprocess.Popen | None = None
+    spk_proc: subprocess.Popen | None = None
     threads: list[threading.Thread] = []
     try:
         if not args.no_mic:
@@ -307,10 +303,8 @@ def main() -> int:
             if proc is None:
                 continue
             if proc.stdin:
-                try:
+                with contextlib.suppress(Exception):
                     proc.stdin.close()
-                except Exception:
-                    pass
             proc.terminate()
             try:
                 proc.wait(timeout=2)

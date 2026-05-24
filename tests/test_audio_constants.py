@@ -16,5 +16,5 @@ def test_silence_chunk_is_actually_silent() -> None:
 
 def test_chunk_byte_size_matches_layout() -> None:
     expected = cli.AUDIO_CHUNK_SAMPLES * cli.AUDIO_CHANNELS * 4  # float32 = 4 bytes
-    assert cli.AUDIO_CHUNK_BYTES == expected
+    assert expected == cli.AUDIO_CHUNK_BYTES
     assert cli.SILENCE_CHUNK.tobytes().__len__() == cli.AUDIO_CHUNK_BYTES
