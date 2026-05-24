@@ -1,0 +1,344 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Chris <goabonga@pm.me>
+
+name: ci
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# `concurrency` cancels superseded PR runs but never main-branch releases.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  # Lint with ruff. ruff needs no project dependencies, so a dev-only sync
+  # avoids building the heavy reachy-mini -> pygobject -> pycairo chain.
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-suffix: ${{ github.job }}
+          python-version: "3.11"
+      - name: Sync (dev tools only)
+        run: uv sync --frozen --only-group dev
+      - name: Lint
+        run: uv run --no-sync ruff check --output-format=github src tests
+      - name: Format check
+        run: uv run --no-sync ruff format --check src tests
+
+  # Static type checking with mypy. Run against the fully-installed
+  # environment so third-party types are present and `warn_unused_ignores`
+  # stays accurate.
+  type-check:
+    name: type-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-suffix: ${{ github.job }}
+          python-version: "3.11"
+      - name: Install system build deps
+        # reachy-mini -> pygobject -> pycairo build from source and need
+        # cairo + the gobject-introspection pkg-config files.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libcairo2-dev \
+            libgirepository1.0-dev \
+            pkg-config
+      - name: Sync
+        run: uv sync --frozen
+      - name: Type-check
+        run: uv run --no-sync mypy src
+
+  # Verify the two-line SPDX header on every source and config file.
+  # `--no-project` runs the stdlib-only helper without installing the
+  # project (no system build deps needed).
+  license-headers:
+    name: license-headers
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-suffix: ${{ github.job }}
+          python-version: "3.11"
+      - name: Check SPDX headers
+        run: |
+          uv run --no-project python scripts/add_license_header.py --path src --types py --check
+          uv run --no-project python scripts/add_license_header.py --path tests --types py --check
+          uv run --no-project python scripts/add_license_header.py --path scripts --types py,sh --check
+          uv run --no-project python scripts/add_license_header.py --path .github --types yml --check
+          uv run --no-project python scripts/add_license_header.py --path . --types toml --check
+
+  # Run the test suite with the 100% coverage gate and report to Codecov.
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-suffix: ${{ github.job }}
+          python-version: "3.11"
+      - name: Install system build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libcairo2-dev \
+            libgirepository1.0-dev \
+            pkg-config
+      - name: Sync
+        run: uv sync --frozen
+      - name: Run tests with coverage
+        run: |
+          uv run --no-sync pytest \
+            --cov-report=xml:coverage.xml \
+            --junitxml=junit.xml \
+            -o junit_family=legacy
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v6
+        with:
+          files: coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+          disable_search: true
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@v6
+        with:
+          files: junit.xml
+          report_type: test_results
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+          disable_search: true
+
+  # Static security analysis of the source (Bandit). Skips are declared
+  # and justified in [tool.bandit] in pyproject.toml.
+  bandit:
+    name: bandit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-suffix: ${{ github.job }}
+          python-version: "3.11"
+      - name: Run Bandit
+        run: uvx --from 'bandit[toml]' bandit -c pyproject.toml --recursive src
+
+  # Audit the installed dependency graph against the PyPI advisory DB.
+  pip-audit:
+    name: pip-audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-suffix: ${{ github.job }}
+          python-version: "3.11"
+      - name: Install system build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libcairo2-dev \
+            libgirepository1.0-dev \
+            pkg-config
+      - name: Sync
+        run: uv sync --frozen
+      - name: Run pip-audit
+        run: uvx pip-audit --skip-editable --path .venv
+
+  # Multi-source vulnerability scan via OSV-Scanner (reads uv.lock).
+  # Suppressions live in osv-scanner.toml (auto-discovered).
+  osv-scanner:
+    name: osv-scanner
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install OSV-Scanner
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -sSfL \
+            "https://github.com/google/osv-scanner/releases/latest/download/osv-scanner_linux_amd64" \
+            -o "$HOME/.local/bin/osv-scanner"
+          chmod +x "$HOME/.local/bin/osv-scanner"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Run OSV-Scanner
+        run: osv-scanner scan source --lockfile=uv.lock
+
+  # Release on main only: bump the version, write the changelog, create
+  # the release commit + tag and push them back. Gated on every quality
+  # job; `needs` blocks on any upstream failure.
+  release:
+    name: release
+    needs:
+      - lint
+      - type-check
+      - license-headers
+      - test
+      - bandit
+      - pip-audit
+      - osv-scanner
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      no_bumps: ${{ steps.bump.outputs.no_bumps }}
+      version: ${{ steps.bump.outputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-suffix: ${{ github.job }}
+          python-version: "3.11"
+      - name: Install multicz
+        run: uv tool install multicz
+      - name: Configure git author
+        # Attribute the release commit to whoever pushed the head commit
+        # that triggered CI, falling back to the github-actions[bot]
+        # noreply identity when the payload carries no author.
+        run: |
+          NAME="${{ github.event.head_commit.author.name }}"
+          EMAIL="${{ github.event.head_commit.author.email }}"
+          git config user.name  "${NAME:-github-actions[bot]}"
+          git config user.email "${EMAIL:-41898282+github-actions[bot]@users.noreply.github.com}"
+      - name: Detect GPG availability
+        # Secrets can't be referenced from `if:` directly, so promote
+        # their presence to a step output.
+        id: gpg
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          if [ -n "$GPG_PRIVATE_KEY" ] && [ -n "$GPG_PASSPHRASE" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Import and unlock GPG key
+        if: steps.gpg.outputs.available == 'true'
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+          # Pre-cache the passphrase in gpg-agent via a dummy sign so
+          # subsequent `git commit -S` / `git tag -s` don't prompt.
+          echo test | gpg --batch --yes --passphrase "$GPG_PASSPHRASE" \
+            --pinentry-mode loopback --sign > /dev/null
+          # Derive the signing key id from the imported key; no extra
+          # secret needed.
+          KEY_ID=$(gpg --list-secret-keys --with-colons \
+            | awk -F: '/^sec/{print $5; exit}')
+          git config user.signingkey "$KEY_ID"
+      - name: Plan release
+        run: uv tool run multicz plan --summary "$GITHUB_STEP_SUMMARY"
+      - name: Bump, commit, tag, push (signed)
+        id: bump_signed
+        if: steps.gpg.outputs.available == 'true'
+        run: |
+          set -euo pipefail
+          PLAN=$(uv tool run multicz bump --commit --tag --push --sign --output json)
+          BUMPED=$(echo "$PLAN" | jq -r '.bumps | keys | join(" ")')
+          if [ -z "$BUMPED" ]; then
+            echo "no_bumps=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "no_bumps=false" >> "$GITHUB_OUTPUT"
+            echo "version=$(uv tool run multicz get reachy-mini-cam-relay)" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Bump, commit, tag, push
+        id: bump_unsigned
+        if: steps.gpg.outputs.available != 'true'
+        run: |
+          set -euo pipefail
+          PLAN=$(uv tool run multicz bump --commit --tag --push --output json)
+          BUMPED=$(echo "$PLAN" | jq -r '.bumps | keys | join(" ")')
+          if [ -z "$BUMPED" ]; then
+            echo "no_bumps=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "no_bumps=false" >> "$GITHUB_OUTPUT"
+            echo "version=$(uv tool run multicz get reachy-mini-cam-relay)" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Resolve release outputs
+        id: bump
+        run: |
+          if [ "${{ steps.gpg.outputs.available }}" = "true" ]; then
+            echo 'no_bumps=${{ steps.bump_signed.outputs.no_bumps }}' >> "$GITHUB_OUTPUT"
+            echo 'version=${{ steps.bump_signed.outputs.version }}' >> "$GITHUB_OUTPUT"
+          else
+            echo 'no_bumps=${{ steps.bump_unsigned.outputs.no_bumps }}' >> "$GITHUB_OUTPUT"
+            echo 'version=${{ steps.bump_unsigned.outputs.version }}' >> "$GITHUB_OUTPUT"
+          fi
+
+  # Build and publish to PyPI, then create the GitHub Release. Trusted
+  # Publishing (OIDC) via the `pypi` environment.
+  pypi-publish:
+    name: pypi-publish
+    needs: [release]
+    if: >-
+      github.event_name == 'push'
+      && github.ref == 'refs/heads/main'
+      && needs.release.result == 'success'
+      && needs.release.outputs.no_bumps == 'false'
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/reachy-mini-cam-relay/
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: main
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-suffix: ${{ github.job }}
+          python-version: "3.11"
+      - name: Install multicz
+        run: uv tool install multicz
+      - name: Build wheel and sdist
+        run: |
+          set -euo pipefail
+          uv build --out-dir dist
+          ls -l dist
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist
+          skip-existing: true
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="${{ needs.release.outputs.version }}"
+          # multicz tags with tag_format = "v{version}" (e.g. v0.1.0).
+          tag="v${version}"
+          notes=$(uv tool run multicz release-notes --tag "$tag")
+          gh release create "$tag" --title "$tag" --notes "$notes" dist/*

@@ -108,3 +108,14 @@ ignore = ["E501"]
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
+
+[tool.bandit]
+# Bandit gates on MEDIUM+ findings; these LOW checks are skipped because
+# every hit is an intentional, reviewed pattern in a system-integration
+# CLI:
+#   B101 - asserts used purely to narrow Optional types for mypy.
+#   B112 - try/except/continue keeps the audio loop alive across glitches.
+#   B404/B603/B607 - subprocess runs PulseAudio tools (pactl/pacat/parec)
+#                    resolved via shutil.which, with no shell and no
+#                    user-controlled arguments.
+skips = ["B101", "B112", "B404", "B603", "B607"]

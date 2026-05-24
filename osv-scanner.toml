@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Chris <goabonga@pm.me>
+
+# OSV-Scanner ignore list. Entries here are reviewed advisories that
+# cannot be acted on yet; each carries a justification and an
+# `ignoreUntil` review date so the suppression is revisited, not
+# forgotten.
+
+[[IgnoredVulns]]
+id = "PYSEC-2026-161"           # starlette Host-header path injection
+ignoreUntil = 2026-08-24
+# starlette is a transitive dependency (reachy-mini -> fastapi ->
+# starlette), pulled in only for fastapi's server stack. The flaw is a
+# Host-header path injection that is exploitable ONLY by a running
+# Starlette/FastAPI server processing untrusted HTTP requests with
+# path-based auth. reachy-mini-cam-relay is a WebRTC *client*: it never
+# starts a Starlette server, so the vulnerable code path is unreachable.
+# The fix (starlette 1.0.1) is a major bump blocked by fastapi 0.136.1's
+# constraint, so it cannot be adopted without upgrading reachy-mini.
+# Drop this entry once reachy-mini ships a fastapi that allows starlette
+# >= 1.0.1.
+reason = "Unreachable: client-only, no Starlette server; fix blocked by fastapi pin in reachy-mini"
