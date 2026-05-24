@@ -64,3 +64,15 @@ changelog = "CHANGELOG.md"
 post_bump = ["uv lock"]
 # No PyPI artifact: this project is distributed as a Debian package built
 # in CI (see .github/workflows/ci.yml) and attached to the GitHub Release.
+
+# Maintain debian/changelog natively: on every bump multicz prepends a
+# fresh stanza (the same feat/fix/perf bullets as CHANGELOG.md), committed
+# in the release commit. multicz versions are non-native (0.1.1-1), so the
+# source package is "3.0 (quilt)". The version source stays the bump_files
+# above; this writer is a pure sink.
+[[components.reachy-mini-cam-relay.writers]]
+type = "debian-changelog"
+file = "debian/changelog"
+distribution = "unstable"
+urgency = "medium"
+maintainer = "Chris <goabonga@pm.me>"

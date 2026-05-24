@@ -1,6 +1,0 @@
-reachy-mini-cam-relay (0.0.0) unstable; urgency=medium
-
-  * Initial Debian packaging: self-contained virtualenv build via
-    dh-virtualenv. The release version is set from multicz at build time.
-
- -- Chris <goabonga@pm.me>  Sat, 24 May 2026 12:00:00 +0000
