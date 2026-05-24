@@ -62,7 +62,5 @@ bump_files = [
 ]
 changelog = "CHANGELOG.md"
 post_bump = ["uv lock"]
-
-[[components.reachy-mini-cam-relay.artifacts]]
-type = "pypi"
-ref = "reachy-mini-cam-relay=={version}"
+# No PyPI artifact: this project is distributed as a Debian package built
+# in CI (see .github/workflows/ci.yml) and attached to the GitHub Release.
