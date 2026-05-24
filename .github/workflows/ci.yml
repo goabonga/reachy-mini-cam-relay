@@ -249,6 +249,16 @@ jobs:
         with:
           enable-cache: true
           cache-suffix: ${{ github.job }}
+      - name: Install system build deps
+        # multicz's post_bump runs `uv lock`, which re-resolves and builds
+        # pycairo / pygobject from source (no wheels published), so it needs
+        # cairo + the gobject-introspection pkg-config files.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libcairo2-dev \
+            libgirepository1.0-dev \
+            pkg-config
       - name: Install multicz
         run: uv tool install multicz
       - name: Configure git author
