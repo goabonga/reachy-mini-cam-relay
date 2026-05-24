@@ -25,3 +25,15 @@ override_dh_virtualenv:
 	  --python /usr/bin/python3 \
 	  --upgrade-pip \
 	  --requirements debian/requirements.txt
+
+# dpkg-shlibdeps must not analyse the bundled virtualenv: manylinux wheels
+# (numpy.libs, scipy.libs, ...) vendor private shared libraries with
+# mangled names (libgfortran-*, libquadmath-*) that no Debian package
+# provides, which aborts the build. dh_strip likewise chokes on those
+# pre-stripped vendored libs. Exclude the install root from both; the
+# runtime system-library deps are declared by hand in debian/control.
+override_dh_shlibdeps:
+	dh_shlibdeps -X/opt/venvs
+
+override_dh_strip:
+	dh_strip -X/opt/venvs
