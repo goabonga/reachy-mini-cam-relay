@@ -1,7 +1,7 @@
 # reachy-mini-cam-relay
 
 [![CI](https://github.com/goabonga/reachy-mini-cam-relay/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/goabonga/reachy-mini-cam-relay/actions/workflows/ci.yml)
-[![PyPI](https://img.shields.io/pypi/v/reachy-mini-cam-relay.svg)](https://pypi.org/project/reachy-mini-cam-relay/)
+[![Release](https://img.shields.io/github/v/release/goabonga/reachy-mini-cam-relay.svg)](https://github.com/goabonga/reachy-mini-cam-relay/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/goabonga/reachy-mini-cam-relay/blob/main/LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 [![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
@@ -38,28 +38,48 @@ If the Reachy is unreachable at startup or the WebRTC link drops mid-session, th
 
 ## Install
 
+### Debian / Ubuntu / Raspberry Pi OS (`.deb`)
+
+Download the package for your architecture (`amd64` or `arm64`) from the
+[latest release](https://github.com/goabonga/reachy-mini-cam-relay/releases/latest),
+then let apt pull its system dependencies:
+
 ```bash
-# system packages
+sudo apt install ./reachy-mini-cam-relay_*_amd64.deb
+```
+
+The package bundles the Python app and all its Python dependencies in a
+self-contained virtualenv under `/opt/venvs`, exposes the
+`reachy-mini-cam-relay` command, ships a systemd **user** service template,
+and installs the setup scripts under `/usr/share/reachy-mini-cam-relay/scripts/`.
+
+One-time host setup (the GStreamer WebRTC element is not packaged in Debian,
+and the virtual devices must be created):
+
+```bash
+# gst-plugins-rs webrtc element (webrtcsrc) — not packaged in Debian.
+# Downloads a prebuilt .deb from
+# https://github.com/goabonga/gst-plugins-rs-rpi/releases (~10 s, needs `gh`),
+# or set FROM_SOURCE=1 to compile from source (~5 min).
+/usr/share/reachy-mini-cam-relay/scripts/install-gst-webrtc-plugin.sh
+
+# create the virtual camera device
+sudo /usr/share/reachy-mini-cam-relay/scripts/setup-v4l2loopback.sh
+
+# create the virtual mic + speakers (optional, for audio relay)
+/usr/share/reachy-mini-cam-relay/scripts/setup-virtual-audio.sh
+```
+
+### From source (development)
+
+```bash
 sudo apt install v4l2loopback-dkms \
     gstreamer1.0-plugins-bad gstreamer1.0-nice \
     python3-gi gir1.2-gst-plugins-bad-1.0
-
-# gst-plugins-rs webrtc element (webrtcsrc) — not packaged on Ubuntu.
-# By default this downloads a prebuilt .deb from
-# https://github.com/goabonga/gst-plugins-rs-rpi/releases (~10 s). Requires
-# `gh` CLI. Set FROM_SOURCE=1 to compile from source instead (~5 min).
 ./scripts/install-gst-webrtc-plugin.sh
-
-# create the virtual camera device
 sudo ./scripts/setup-v4l2loopback.sh
-
-# create the virtual mic + speakers (optional, for audio relay)
 ./scripts/setup-virtual-audio.sh
-
-# project (uv recommended — installs in seconds)
-uv sync
-# or with pip:
-# pip install reachy-mini-cam-relay
+uv sync   # build a local dev virtualenv from uv.lock
 ```
 
 ## Usage
@@ -74,6 +94,16 @@ In the meeting app, pick in each selector:
 - Speakers / audio output → **ReachySpeakers** (selectable directly in Chrome/Firefox, or via `pavucontrol` → Playback tab, per-app)
 
 Resolution is auto-detected from the incoming stream. Optional flags: `--fps 30`, `--no-mic`, `--no-speakers`.
+
+### As a systemd service
+
+The `.deb` ships a systemd **user** service template (`%i` = the Reachy host).
+Audio runs in your user session, so enable it as a user unit:
+
+```bash
+systemctl --user enable --now reachy-mini-cam-relay@192.168.1.231
+journalctl --user -u reachy-mini-cam-relay@192.168.1.231 -f
+```
 
 ## Known pitfalls
 

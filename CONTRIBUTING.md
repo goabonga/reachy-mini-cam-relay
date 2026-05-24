@@ -46,7 +46,7 @@ uv sync                                    # install / re-sync from uv.lock
 uv sync --frozen                           # install strictly from the lock (CI mode)
 uv sync --extra head-tracking              # add the optional MediaPipe extras (on that branch)
 uv lock                                    # refresh uv.lock after editing pyproject.toml
-uv build                                   # build sdist + wheel into dist/
+./packaging/build-deb.sh                   # build the Debian package (.deb)
 uv run reachy-mini-cam-relay --help        # run the CLI from the project venv
 uv run ruff check src/ tests/              # lint
 uv run mypy src/                           # static type check
@@ -143,6 +143,6 @@ Releases are automated. On every push to `main`, the `ci` workflow runs
 `multicz bump`: it computes the next version from the Conventional Commits
 since the last tag, updates `pyproject.toml`,
 `src/reachy_mini_cam_relay/__init__.py` and `CHANGELOG.md`, creates a
-signed commit and tag, publishes to PyPI via Trusted Publishing and cuts a
-GitHub Release. Maintainers do not bump versions or edit the changelog by
-hand.
+signed commit and tag, builds the Debian packages (amd64 + arm64) and
+attaches them to a GitHub Release. Maintainers do not bump versions or edit
+the changelog by hand.
