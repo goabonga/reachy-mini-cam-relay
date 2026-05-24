@@ -29,9 +29,7 @@ def test_parses_sink_names(monkeypatch: pytest.MonkeyPatch) -> None:
         "2\treachy_speakers\tmodule-null-sink.c\tfloat32le 2ch 16000Hz\tIDLE\n"
     )
     monkeypatch.setattr(cli.shutil, "which", lambda _name: "/usr/bin/pactl")
-    monkeypatch.setattr(
-        cli.subprocess, "check_output", lambda *_a, **_kw: output
-    )
+    monkeypatch.setattr(cli.subprocess, "check_output", lambda *_a, **_kw: output)
     assert cli._pactl_sinks() == {
         "alsa_output.pci-0000_00_1f.3.analog-stereo",
         "reachy_sink",

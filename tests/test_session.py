@@ -55,9 +55,11 @@ def test_concurrent_set_and_clear_never_returns_corrupted_state() -> None:
             if popped is not None and popped not in valid:
                 seen_invalid.append(popped)
 
-    threads = [
-        threading.Thread(target=writer, args=(v,)) for v in valid
-    ] + [threading.Thread(target=reader)] + [threading.Thread(target=clearer)]
+    threads = (
+        [threading.Thread(target=writer, args=(v,)) for v in valid]
+        + [threading.Thread(target=reader)]
+        + [threading.Thread(target=clearer)]
+    )
     for t in threads:
         t.start()
     for t in threads:

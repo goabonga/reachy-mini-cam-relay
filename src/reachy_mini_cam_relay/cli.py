@@ -71,9 +71,7 @@ def _close(media: Optional[MediaManager]) -> None:
             pass
 
 
-def _connect_with_backoff(
-    host: str, stop_event: threading.Event
-) -> Optional[MediaManager]:
+def _connect_with_backoff(host: str, stop_event: threading.Event) -> Optional[MediaManager]:
     attempt = 0
     while not stop_event.is_set():
         try:
@@ -92,9 +90,7 @@ def _connect_with_backoff(
     return None
 
 
-def _mic_loop(
-    session: Session, proc: subprocess.Popen, stop_event: threading.Event
-) -> None:
+def _mic_loop(session: Session, proc: subprocess.Popen, stop_event: threading.Event) -> None:
     """Pipe Reachy mic audio to pacat; push silence when disconnected."""
     assert proc.stdin is not None  # spawned with stdin=PIPE
     silence_bytes = SILENCE_CHUNK.tobytes()
@@ -122,9 +118,7 @@ def _mic_loop(
             return
 
 
-def _speakers_loop(
-    session: Session, proc: subprocess.Popen, stop_event: threading.Event
-) -> None:
+def _speakers_loop(session: Session, proc: subprocess.Popen, stop_event: threading.Event) -> None:
     """Pull browser audio from parec; forward to Reachy or drop when disconnected."""
     assert proc.stdout is not None  # spawned with stdout=PIPE
     while not stop_event.is_set():
@@ -197,7 +191,9 @@ def main() -> int:
             if pacat and MIC_SINK in sinks:
                 mic_proc = subprocess.Popen(
                     [
-                        pacat, "--playback", "--raw",
+                        pacat,
+                        "--playback",
+                        "--raw",
                         f"--device={MIC_SINK}",
                         "--format=float32le",
                         f"--rate={AUDIO_RATE}",
@@ -222,7 +218,8 @@ def main() -> int:
             if parec and SPEAKERS_SINK in sinks:
                 spk_proc = subprocess.Popen(
                     [
-                        parec, "--raw",
+                        parec,
+                        "--raw",
                         f"--device={SPEAKERS_SINK}.monitor",
                         "--format=float32le",
                         f"--rate={AUDIO_RATE}",

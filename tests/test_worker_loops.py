@@ -85,9 +85,7 @@ def test_speakers_loop_returns_on_eof() -> None:
 def test_speakers_loop_drops_audio_when_disconnected() -> None:
     session = cli.Session()  # disconnected
     stdout = MagicMock()
-    payload = np.ones(
-        (cli.AUDIO_CHUNK_SAMPLES, cli.AUDIO_CHANNELS), dtype=np.float32
-    ).tobytes()
+    payload = np.ones((cli.AUDIO_CHUNK_SAMPLES, cli.AUDIO_CHANNELS), dtype=np.float32).tobytes()
     # First read returns audio, second returns EOF to terminate the loop.
     stdout.read.side_effect = [payload, b""]
 
@@ -122,9 +120,7 @@ def test_speakers_loop_swallows_push_errors() -> None:
     session.set(media)
 
     stdout = MagicMock()
-    payload = np.zeros(
-        (cli.AUDIO_CHUNK_SAMPLES, cli.AUDIO_CHANNELS), dtype=np.float32
-    ).tobytes()
+    payload = np.zeros((cli.AUDIO_CHUNK_SAMPLES, cli.AUDIO_CHANNELS), dtype=np.float32).tobytes()
     stdout.read.side_effect = [payload, b""]
 
     cli._speakers_loop(session, _make_proc(stdout=stdout), threading.Event())

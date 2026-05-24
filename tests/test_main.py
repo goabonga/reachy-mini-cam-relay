@@ -268,9 +268,7 @@ def test_main_warns_and_continues_when_audio_sinks_missing(
 
     fake_cam = MagicMock()
     fake_cam.device = "/dev/video10"
-    fake_cam.sleep_until_next_frame.side_effect = lambda: captured[
-        "stop_event"
-    ].set()
+    fake_cam.sleep_until_next_frame.side_effect = lambda: captured["stop_event"].set()
     fake_camera_cm = MagicMock()
     fake_camera_cm.__enter__.return_value = fake_cam
     fake_camera_cm.__exit__.return_value = None
