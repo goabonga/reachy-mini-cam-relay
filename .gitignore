@@ -24,5 +24,17 @@ dist/
 htmlcov/
 coverage.xml
 
+# Debian build (generated / artifacts)
+debian/requirements.txt
+debian/files
+debian/.debhelper/
+debian/reachy-mini-cam-relay/
+debian/reachy-mini-cam-relay.substvars
+debian/debhelper-build-stamp
+debian/*.debhelper.log
+*.deb
+*.buildinfo
+*.changes
+
 # Project
 *.log

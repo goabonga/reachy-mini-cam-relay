@@ -1,0 +1,4 @@
+packaging/systemd/reachy-mini-cam-relay@.service usr/lib/systemd/user
+scripts/setup-v4l2loopback.sh                     usr/share/reachy-mini-cam-relay/scripts
+scripts/setup-virtual-audio.sh                    usr/share/reachy-mini-cam-relay/scripts
+scripts/install-gst-webrtc-plugin.sh              usr/share/reachy-mini-cam-relay/scripts

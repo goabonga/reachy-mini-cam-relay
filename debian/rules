@@ -1,0 +1,27 @@
+#!/usr/bin/make -f
+
+# Standard Debian packaging built on debhelper + dh-virtualenv: the Python
+# app and its PyPI dependencies (reachy-mini, pygobject, ...) are not in
+# Debian, so they are bundled into a self-contained virtualenv under
+# /opt/venvs/reachy-mini-cam-relay. Only the system media libraries are
+# declared as Depends in debian/control.
+
+export DH_VIRTUALENV_INSTALL_ROOT=/opt/venvs
+
+%:
+	dh $@ --with python-virtualenv
+
+# Pin the runtime dependencies to uv.lock. debian/requirements.txt is
+# generated (not committed) before the build; see packaging/build-deb.sh
+# and debian/README.source. Fail loudly if it is missing.
+override_dh_virtualenv:
+	@test -f debian/requirements.txt || { \
+	  echo "ERROR: debian/requirements.txt is missing."; \
+	  echo "Generate it first: uv export --frozen --no-dev --no-annotate \\"; \
+	  echo "    --no-hashes --no-emit-project -o debian/requirements.txt"; \
+	  exit 1; \
+	}
+	dh_virtualenv \
+	  --python /usr/bin/python3 \
+	  --upgrade-pip \
+	  --requirements debian/requirements.txt

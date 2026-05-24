@@ -1,0 +1,39 @@
+reachy-mini-cam-relay — Debian source notes
+===========================================
+
+This package is built with debhelper + dh-virtualenv. The application and
+all of its Python dependencies (reachy-mini, pygobject, fastapi, ...) are
+not available in Debian, so they are bundled into a self-contained
+virtualenv installed under /opt/venvs/reachy-mini-cam-relay. The system
+media libraries (GStreamer, v4l2loopback, PulseAudio) are shared with the
+host and declared as Depends in debian/control.
+
+Pinned dependencies
+-------------------
+
+The exact runtime dependency versions come from uv.lock (the single source
+of truth). They are exported to debian/requirements.txt, which is NOT
+committed — it is generated before each build:
+
+    uv export --frozen --no-dev --no-annotate --no-hashes \
+        --no-emit-project -o debian/requirements.txt
+
+The helper script packaging/build-deb.sh does this for you.
+
+Building locally
+----------------
+
+    ./packaging/build-deb.sh
+
+Note: the bundled virtualenv is tied to the Python minor version of the
+build host. To produce a package for Raspberry Pi OS / Debian 12 (python
+3.11), build inside a debian:12 container (this is what CI does); see
+.github/workflows/ci.yml.
+
+Release version
+---------------
+
+The package is "3.0 (native)", so debian/changelog carries the bare
+version (e.g. 0.1.0) with no Debian revision. On a release, CI sets that
+version from multicz before building; the committed changelog only seeds
+the entry.
