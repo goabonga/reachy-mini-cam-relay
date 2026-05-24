@@ -31,8 +31,11 @@ updates:
           - "mypy"
           - "pytest*"
           - "pre-commit"
+    # Runtime deps ship in the package, so their bumps are fixes (and the
+    # signed-commit rewrite confirms this from the dev-group membership);
+    # dev tooling stays chore.
     commit-message:
-      prefix: "chore(deps)"
+      prefix: "fix(deps)"
       prefix-development: "chore(deps)"
     labels:
       - "dependencies"
