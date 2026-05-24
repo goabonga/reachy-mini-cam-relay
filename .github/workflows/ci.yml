@@ -249,7 +249,6 @@ jobs:
         with:
           enable-cache: true
           cache-suffix: ${{ github.job }}
-          python-version: "3.11"
       - name: Install multicz
         run: uv tool install multicz
       - name: Configure git author
@@ -404,7 +403,6 @@ jobs:
         with:
           enable-cache: true
           cache-suffix: ${{ github.job }}
-          python-version: "3.11"
       - name: Install multicz
         run: uv tool install multicz
       - name: Download built .debs
