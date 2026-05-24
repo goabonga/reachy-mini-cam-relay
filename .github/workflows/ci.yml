@@ -193,6 +193,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          # multicz computes the next version from the full commit history.
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-suffix: ${{ github.job }}
+          python-version: "3.11"
+      - name: Stage a temporary version bump
+        # debian/changelog is intentionally empty between releases, and the
+        # .deb version is read from it (the bundled project is taken from
+        # pyproject). Apply the *next* computed version to both so the smoke
+        # package is coherently versioned with the eventual release.
+        # --no-post-bump skips `uv lock` - a version-only change keeps
+        # `uv export --frozen` valid in build-deb.sh - and nothing is
+        # committed, tagged or pushed: the bump is thrown away with the run.
+        run: uvx multicz bump --no-post-bump
       - name: Build .deb (amd64)
         run: |
           set -euo pipefail
@@ -214,6 +231,10 @@ jobs:
             '
           ls -l dist-deb
       - uses: actions/upload-artifact@v7
+        # Only PRs need the smoke artifact; on main the release flow builds
+        # the real, per-arch packages (deb-release) and attaches them to the
+        # GitHub Release, so uploading here would be redundant.
+        if: github.event_name == 'pull_request'
         with:
           name: deb-smoke-amd64
           path: dist-deb/*.deb
