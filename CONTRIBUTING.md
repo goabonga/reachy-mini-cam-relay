@@ -28,6 +28,7 @@ By participating in this project you agree to abide by the [Code of Conduct](htt
    uv sync                       # base install
    # or, on the head-tracking branch:
    uv sync --extra head-tracking
+   uv run pre-commit install     # install the pre-commit + commit-msg hooks
    ```
 
 4. **One-time system setup** (required to actually run the relay):
@@ -51,9 +52,9 @@ uv run ruff check src/ tests/              # lint
 uv run mypy src/                           # static type check
 uv run pytest                              # unit tests + coverage gate
 uv run pytest --cov-report=html            # generate htmlcov/ for browsing
-uv run cz commit                           # interactive Conventional Commits prompt
-uv run cz bump --dry-run                   # preview the next release version
-uv run cz bump --yes --changelog           # bump version + update CHANGELOG.md (release-only)
+uv run pre-commit run --all-files          # run the local hooks (lint, headers, commit-msg)
+uv tool run multicz validate --strict      # validate Conventional Commits + config
+uv tool run multicz plan                   # preview the next release version
 ```
 
 ## Branch naming
@@ -81,13 +82,7 @@ This project follows [Conventional Commits](https://www.conventionalcommits.org/
 <type>(<optional scope>): <description>
 ```
 
-Use commitizen for an interactive prompt:
-
-```bash
-uv run cz commit
-```
-
-Or write the commit manually:
+Write the commit message directly:
 
 ```bash
 git commit -m "feat: support multiple Reachy hosts"
@@ -95,13 +90,13 @@ git commit -m "fix(reconnect): widen exponential backoff cap to 60s"
 git commit -m "docs: add troubleshooting note for Chrome on Wayland"
 ```
 
-Valid types: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`. Use the optional scope to point at a subsystem (e.g. `feat(head-tracking): …`, `ci(packaging): …`).
+Valid types: `feat`, `fix`, `perf`, `docs`, `style`, `refactor`, `test`, `chore`, `ci`. Use the optional scope to point at a subsystem (e.g. `feat(head-tracking): …`, `ci(packaging): …`). Do not append `Co-Authored-By` trailers.
 
-The release pipeline (`.github/workflows/release.yml`) is gated on a commit whose subject starts with `chore(release):` — the bump itself is performed by commitizen, no manual version edits.
+Only `feat`, `fix` and `perf` commits that touch the tracked paths (`src/**`, `pyproject.toml`) trigger a release; everything else is maintenance. The version bump and CHANGELOG are computed by [multicz](https://github.com/goabonga/multicz) — never edit the version or CHANGELOG by hand.
 
 ## Code Quality
 
-Before pushing, make sure your code passes the same gates the `Tests` workflow runs on every push and pull request:
+Before pushing, make sure your code passes the same gates the `ci` workflow runs on every push and pull request:
 
 ```console
 uv run ruff check src/ tests/   # lint (fails the build if anything reports)
@@ -111,7 +106,7 @@ uv run pytest                   # unit tests + coverage gate
 
 ### Coverage
 
-The pytest config in `pyproject.toml` enforces a minimum coverage threshold (`--cov-fail-under=40`). The bar is intentionally set just below the current state so it acts as a regression guard rather than a hard quality target — raise it as the suite grows. The orchestrating `main()` and the head-tracking module are intentionally not unit-tested (they wire pyvirtualcam, GStreamer, signal handlers and threads together and belong in an integration test layer).
+The pytest config in `pyproject.toml` enforces a **100% coverage gate** (`--cov-fail-under=100`). New code must come with tests that keep the suite at 100% — use `monkeypatch`/mocks to cover the orchestration glue (pyvirtualcam, GStreamer, signal handlers and threads) rather than touching real hardware.
 
 `htmlcov/` is git-ignored — generate it locally with `uv run pytest --cov-report=html` and open `htmlcov/index.html` to drill into uncovered lines.
 
@@ -138,18 +133,16 @@ Unit tests live in `tests/` and follow standard pytest discovery. Use `monkeypat
    - Reference related issues (e.g. `Closes #42`).
    - Include steps to test or verify the changes (a quick `journalctl --user -u reachy-mini-cam-relay@<host>` snippet usually goes a long way for runtime regressions).
 
-4. Make sure the `Tests` CI workflow passes.
+4. Make sure the `ci` workflow passes.
 
 5. Wait for review and address feedback if needed.
 
 ### Release
 
-Releases are triggered by commits with the `chore(release):` prefix on `main` branch:
-
-```bash
-# Standard release (version bumped automatically based on conventional commits)
-git commit --allow-empty -m "chore(release): release a new version"
-
-# Stable release (bumps major version, e.g. 0.x.x → 1.0.0)
-git commit --allow-empty -m "chore(release): release a stable version"
-```
+Releases are automated. On every push to `main`, the `ci` workflow runs
+`multicz bump`: it computes the next version from the Conventional Commits
+since the last tag, updates `pyproject.toml`,
+`src/reachy_mini_cam_relay/__init__.py` and `CHANGELOG.md`, creates a
+signed commit and tag, publishes to PyPI via Trusted Publishing and cuts a
+GitHub Release. Maintainers do not bump versions or edit the changelog by
+hand.

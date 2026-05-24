@@ -1,5 +1,11 @@
 # reachy-mini-cam-relay
 
+[![CI](https://github.com/goabonga/reachy-mini-cam-relay/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/goabonga/reachy-mini-cam-relay/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/reachy-mini-cam-relay.svg)](https://pypi.org/project/reachy-mini-cam-relay/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/goabonga/reachy-mini-cam-relay/blob/main/LICENSE)
+[![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
+[![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
+
 Relay the Reachy Mini **camera, microphone and speakers** over the network into Linux virtual devices, so any browser-based video app (Jitsi, Google Meet, Teams, Discord…) sees them as standard devices — full two-way telepresence.
 
 ## How it works
