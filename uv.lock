@@ -1961,7 +1961,7 @@ wheels = [
 
 [[package]]
 name = "reachy-mini"
-version = "1.7.0"
+version = "1.7.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
@@ -1996,9 +1996,9 @@ dependencies = [
     { name = "websockets" },
     { name = "zeroconf" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/e0/6e/fd11c02787149d6e237f290bb23f8d281f380ba5c0631add0499bc47cc44/reachy_mini-1.7.0.tar.gz", hash = "sha256:42a5424cce1889d4d14cf14b004e23dbcb97d8d8679917d091ed2965bbf29448", size = 24720565, upload-time = "2026-04-22T12:10:39.57Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a5/6e/13c306ae5f8e596fef397dafe26fdb3519812eacb3c6eb6e32fc5149cfd8/reachy_mini-1.7.3.tar.gz", hash = "sha256:adc0b0b2febfe6224919069d6080f93fb88d0af0dd0411e776471d1441f81e45", size = 24737633, upload-time = "2026-05-13T14:30:32.09Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a0/22/b624ad9fe332c9c6544bc60d9a1a76a5f239d364f75d568f9ed73f1b5e0c/reachy_mini-1.7.0-py3-none-any.whl", hash = "sha256:4f19ce9f7d4f4469768f9521eede6e22a35627a68719be73aa1b4a967e584ebe", size = 24818271, upload-time = "2026-04-22T12:10:36.622Z" },
+    { url = "https://files.pythonhosted.org/packages/ee/fc/e464236bde6e25a3dde4655973076962c756a2da46c37f2adb25c8363ce1/reachy_mini-1.7.3-py3-none-any.whl", hash = "sha256:209c712b31ccf77b8ff7d861c4598a1e0f4596656a161b12d1e4068bc76fe006", size = 24834307, upload-time = "2026-05-13T14:30:28.406Z" },
 ]
 
 [[package]]
@@ -2024,7 +2024,7 @@ dev = [
 requires-dist = [
     { name = "numpy" },
     { name = "pyvirtualcam", specifier = ">=0.11" },
-    { name = "reachy-mini", specifier = ">=1.7.0" },
+    { name = "reachy-mini", specifier = ">=1.7.3" },
 ]
 
 [package.metadata.requires-dev]
