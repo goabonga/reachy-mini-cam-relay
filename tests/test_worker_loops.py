@@ -146,7 +146,7 @@ def test_mic_loop_silence_then_continue_when_wait_returns_false(
         wait_calls["n"] += 1
         # First wait: not stopped → loop continues. Second wait: stop signalled.
         if wait_calls["n"] >= 2:
-            return True
+            return True  # pragma: no cover
         stop.set()  # set BEFORE returning so the next is_set() check exits
         return False
 

@@ -50,13 +50,13 @@ def test_concurrent_set_and_clear_never_returns_corrupted_state() -> None:
         for _ in range(500):
             cur = s.media
             if cur is not None and cur not in valid:
-                seen_invalid.append(cur)
+                seen_invalid.append(cur)  # pragma: no cover
 
     def clearer() -> None:
         for _ in range(500):
             popped = s.clear()
             if popped is not None and popped not in valid:
-                seen_invalid.append(popped)
+                seen_invalid.append(popped)  # pragma: no cover
 
     threads = (
         [threading.Thread(target=writer, args=(v,)) for v in valid]

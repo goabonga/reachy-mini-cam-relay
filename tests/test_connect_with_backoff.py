@@ -22,7 +22,7 @@ def test_returns_media_on_first_success(monkeypatch: pytest.MonkeyPatch) -> None
 def test_returns_none_when_stop_event_set_before_call(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def must_not_call(_host: str) -> object:
+    def must_not_call(_host: str) -> object:  # pragma: no cover
         raise AssertionError("connect should not be invoked once stop is set")
 
     monkeypatch.setattr(cli, "_connect", must_not_call)

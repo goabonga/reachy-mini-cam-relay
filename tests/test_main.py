@@ -256,7 +256,7 @@ def test_main_warns_and_continues_when_audio_sinks_missing(
 
     popen_called = {"n": 0}
 
-    def fake_popen(*_args: object, **_kw: object) -> MagicMock:
+    def fake_popen(*_args: object, **_kw: object) -> MagicMock:  # pragma: no cover
         popen_called["n"] += 1
         return MagicMock()
 
