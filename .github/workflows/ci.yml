@@ -197,10 +197,12 @@ jobs:
           # multicz computes the next version from the full commit history.
           fetch-depth: 0
       - uses: astral-sh/setup-uv@v7
+        # No python-version pin: multicz requires Python >=3.12 and uv
+        # auto-downloads it. The .deb itself builds under python3.11 inside
+        # the debian:12 container, independent of this host interpreter.
         with:
           enable-cache: true
           cache-suffix: ${{ github.job }}
-          python-version: "3.11"
       - name: Stage a temporary version bump
         # debian/changelog is intentionally empty between releases, and the
         # .deb version is read from it (the bundled project is taken from
