@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Chris <goabonga@pm.me>
+
 # Install the gst-plugins-rs webrtc plugin (required by reachy-mini for
 # `webrtcsrc`). Tries the prebuilt .deb from goabonga/gst-plugins-rs-rpi
 # releases first (~10s); falls back to building from source if unavailable

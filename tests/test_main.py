@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Chris <goabonga@pm.me>
+
 """End-to-end tests for ``cli.main`` driven entirely by mocks.
 
 These tests exercise the orchestration glue — argparse, connection bootstrap,

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Chris <goabonga@pm.me>
+
 """Tests for ``reachy_mini_cam_relay.cli.Session``."""
 
 import threading

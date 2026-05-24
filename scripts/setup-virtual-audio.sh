@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Chris <goabonga@pm.me>
+
 # Create PulseAudio/PipeWire virtual audio devices for reachy-mini-cam-relay:
 #   - "ReachyMic"       : what browsers see as a microphone.
 #                         the relay writes the Reachy's incoming audio into it.

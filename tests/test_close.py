@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Chris <goabonga@pm.me>
+
 """Tests for ``cli._close`` — must always be a no-op-or-clean shutdown."""
 
 from unittest.mock import MagicMock

@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Chris <goabonga@pm.me>
+
 # Load v4l2loopback so /dev/video10 appears as "reachy-mini-cam-relay" to the browser.
 # exclusive_caps=1 is required for Chrome to accept the device.
 set -euo pipefail
