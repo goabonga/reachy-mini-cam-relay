@@ -57,9 +57,9 @@ Changelog = "https://github.com/goabonga/reachy-mini-cam-relay/blob/main/CHANGEL
 
 [dependency-groups]
 dev = [
-    "ruff>=0.15.14",
-    "mypy>=2.1.0",
-    "pytest>=8",
+    "ruff>=0.15.21",
+    "mypy>=2.2.0",
+    "pytest>=9.1.1",
     "pytest-cov>=5",
     "pre-commit>=4",
 ]
