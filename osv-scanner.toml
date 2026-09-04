@@ -6,17 +6,40 @@
 # `ignoreUntil` review date so the suppression is revisited, not
 # forgotten.
 
+# --- starlette -------------------------------------------------------
+# starlette is a transitive dependency (reachy-mini -> starlette, and
+# reachy-mini -> fastapi -> starlette), pulled in only for fastapi's
+# server stack. Every advisory below is exploitable ONLY by a running
+# Starlette/FastAPI server handling untrusted HTTP requests.
+# reachy-mini-cam-relay is a WebRTC *client*: it never starts a
+# Starlette server, so none of the vulnerable code paths are reachable.
+#
+# All the fixes land in starlette >= 1.0.1, and reachy-mini pins
+# `starlette<1.0.0`, so they cannot be adopted from here. 0.52.1 is the
+# newest stable release under that pin. Drop these entries once
+# reachy-mini relaxes the pin to allow starlette >= 1.3.1.
+
 [[IgnoredVulns]]
-id = "PYSEC-2026-161"           # starlette Host-header path injection
-ignoreUntil = 2026-08-24
-# starlette is a transitive dependency (reachy-mini -> fastapi ->
-# starlette), pulled in only for fastapi's server stack. The flaw is a
-# Host-header path injection that is exploitable ONLY by a running
-# Starlette/FastAPI server processing untrusted HTTP requests with
-# path-based auth. reachy-mini-cam-relay is a WebRTC *client*: it never
-# starts a Starlette server, so the vulnerable code path is unreachable.
-# The fix (starlette 1.0.1) is a major bump blocked by fastapi 0.136.1's
-# constraint, so it cannot be adopted without upgrading reachy-mini.
-# Drop this entry once reachy-mini ships a fastapi that allows starlette
-# >= 1.0.1.
-reason = "Unreachable: client-only, no Starlette server; fix blocked by fastapi pin in reachy-mini"
+id = "PYSEC-2026-161"           # Host-header path injection into request.url.path
+ignoreUntil = 2026-12-04
+reason = "Unreachable: client-only, no Starlette server; fix (1.0.1) blocked by reachy-mini's starlette<1.0.0 pin"
+
+[[IgnoredVulns]]
+id = "PYSEC-2026-2280"          # HTTPEndpoint method lookup reaches arbitrary attributes
+ignoreUntil = 2026-12-04
+reason = "Unreachable: client-only, no Starlette server; fix (1.1.0) blocked by reachy-mini's starlette<1.0.0 pin"
+
+[[IgnoredVulns]]
+id = "PYSEC-2026-2281"          # StaticFiles UNC-path SSRF (Windows only)
+ignoreUntil = 2026-12-04
+reason = "Unreachable: client-only, no Starlette server, and Linux-only target; fix (1.1.0) blocked by reachy-mini's starlette<1.0.0 pin"
+
+[[IgnoredVulns]]
+id = "PYSEC-2026-248"           # unvalidated request path spoofs request.url.hostname
+ignoreUntil = 2026-12-04
+reason = "Unreachable: client-only, no Starlette server; fix (1.3.0) blocked by reachy-mini's starlette<1.0.0 pin"
+
+[[IgnoredVulns]]
+id = "PYSEC-2026-249"           # form() size limits ignored for urlencoded bodies
+ignoreUntil = 2026-12-04
+reason = "Unreachable: client-only, no Starlette server; fix (1.3.1) blocked by reachy-mini's starlette<1.0.0 pin"
