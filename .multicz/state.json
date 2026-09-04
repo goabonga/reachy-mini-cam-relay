@@ -1,12 +1,12 @@
 {
   "version": 1,
-  "git_head": "96d624f3bbddb689a9864f7dee89e0f2d5f8fafe",
-  "git_head_short": "96d624f",
-  "timestamp": "2026-05-24T22:39:22Z",
+  "git_head": "94f3248daa0eace10bba5b9e1fa4996bf8e55d77",
+  "git_head_short": "94f3248",
+  "timestamp": "2026-09-04T20:51:10Z",
   "components": {
     "reachy-mini-cam-relay": {
-      "version": "0.1.0",
-      "tag": "v0.1.0",
+      "version": "0.1.1",
+      "tag": "v0.1.1",
       "tag_sha": null
     }
   }

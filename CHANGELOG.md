@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/). New entries are
 generated from [Conventional Commits](https://www.conventionalcommits.org/)
 by [multicz](https://github.com/goabonga/multicz).
 
+## [0.1.1] - 2026-09-04
+
+### Fixed
+
+- **deps**: bump reachy-mini from 1.7.3 to 1.10.0 (`33b3a29`)
+- **deps**: bump pip, python-multipart and setuptools to patched versions (`4357126`)
+
 ## [0.1.0] - 2026-05-24
 
 ### Added

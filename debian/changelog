@@ -1,3 +1,10 @@
+reachy-mini-cam-relay (0.1.1-1) unstable; urgency=medium
+
+  * fix(deps): Bump reachy-mini from 1.7.3 to 1.10.0
+  * fix(deps): Bump pip, python-multipart and setuptools to patched versions
+
+ -- Chris <goabonga@pm.me>  Fri, 04 Sep 2026 20:51:10 +0000
+
 reachy-mini-cam-relay (0.1.0-1) unstable; urgency=medium
 
   * feat: Relay Reachy Mini camera, mic and speakers as Linux virtual devices with automatic reconnection
