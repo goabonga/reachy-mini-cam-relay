@@ -51,11 +51,17 @@ types = ["perf"]
 
 [components.reachy-mini-cam-relay]
 # A commit counts toward the bump and CHANGELOG only if it touches one of
-# these paths - the source and the project/deps/metadata file. Everything
-# else (LICENSE, README, .github, docs, tests, scripts, tooling configs)
-# is intentionally NOT tracked, so infra/docs-only work never counts as a
-# package release.
-paths = ["src/**", "pyproject.toml"]
+# these paths - the source, the project/deps/metadata file and the
+# lockfile. uv.lock is tracked because it defines what actually ships:
+# packaging/build-deb.sh exports it to debian/requirements.txt and the
+# .deb bundles that venv, so a runtime dependency bump changes the
+# delivered artifact and deserves a version. Dev-only bumps stay out of
+# the way on their own: Dependabot labels runtime updates `fix(deps)`
+# (patch) and development ones `chore(deps)`, and `chore` is not in
+# bump_rules. Everything else (LICENSE, README, .github, docs, tests,
+# scripts, tooling configs) is intentionally NOT tracked, so infra- or
+# docs-only work never counts as a package release.
+paths = ["src/**", "pyproject.toml", "uv.lock"]
 bump_files = [
     { file = "pyproject.toml", key = "project.version" },
     { file = "src/reachy_mini_cam_relay/__init__.py", key = "regex:__version__\\s*=\\s*[\"']([^\"']+)[\"']" },
