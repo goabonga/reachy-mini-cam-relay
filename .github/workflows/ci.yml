@@ -96,13 +96,19 @@ jobs:
           enable-cache: true
           cache-suffix: ${{ github.job }}
           python-version: "3.11"
+      # Building PyGObject/pycairo needs the -dev packages; the GStreamer
+      # typelibs are needed at *import* time: reachy-mini calls
+      # gi.require_version("Gst"/"GstApp"/"GstPbutils") at module scope, so
+      # merely importing the package under test fails without them.
       - name: Install system build deps
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             libcairo2-dev \
             libgirepository1.0-dev \
-            pkg-config
+            pkg-config \
+            gir1.2-gstreamer-1.0 \
+            gir1.2-gst-plugins-base-1.0
       - name: Sync
         run: uv sync --frozen
       - name: Run tests with coverage
